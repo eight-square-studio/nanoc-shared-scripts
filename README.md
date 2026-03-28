@@ -107,8 +107,8 @@ steps directly and does not call back into this repo.
 - `push` to the `release` branch — primary trigger for production deploys
 - `workflow_call` — can be invoked from another workflow in your project if needed
 
-**What it does:** checkout (full history + recursive submodules) → Ruby setup →
-`bundle install` → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` →
+**What it does:** checkout (full history + recursive submodules, authenticated via `GH_PAT`) → Ruby setup →
+`bundle install` → nanoc version check → git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` (with `CI=true`) →
 merge `release` back into `main`
 
 ### Secrets required
@@ -122,10 +122,10 @@ Set these in GitHub repo Settings → Secrets and variables → Actions:
 | `AWS_REGION` | e.g. `eu-west-1` |
 | `GH_PAT` | Personal access token (see instructions below) |
 
-### Private submodule access (GH_PAT)
+### GH_PAT setup
 
-If `nanoc-shared-scripts` is a private repo, CI needs a `GH_PAT` secret to check
-it out. Without it the action will fail with "repository not found".
+`GH_PAT` is required — the workflow uses it to authenticate the submodule checkout.
+Without it the action will fail with "repository not found".
 
 1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)** https://github.com/settings/tokens
 2. Click **Generate new token (classic)**

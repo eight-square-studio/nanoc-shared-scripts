@@ -115,8 +115,9 @@ Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_REGION`
+- `GH_PAT` — personal access token with `repo` scope, used by `actions/checkout` to pull the private submodule
 
-**What it does:** checkout (full history + recursive submodules) → Ruby setup → `bundle install`
+**What it does:** checkout (full history + recursive submodules, authenticated via `GH_PAT`) → Ruby setup → `bundle install`
 → nanoc version check → git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` (with `CI=true`)
 → merge `release` → `main`
 
