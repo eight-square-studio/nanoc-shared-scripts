@@ -108,14 +108,16 @@ if [[ $FAIL_COUNT -gt 0 ]]; then
     exit 1
 fi
 
-# --- Ensure .validated is gitignored ---
+# --- Ensure local-only files are gitignored ---
 gitignore_file="$current_dir/.gitignore"
-if [[ -f "$gitignore_file" ]] && grep -q "^\.validated$" "$gitignore_file"; then
-    echo -e "${PASS} .gitignore already ignores .validated"
-else
-    echo ".validated" >> "$gitignore_file"
-    echo -e "${PASS} Added .validated to .gitignore"
-fi
+for entry in .validated run.sh deploy.sh; do
+    if grep -q "^${entry}$" "$gitignore_file" 2>/dev/null; then
+        echo -e "${PASS} .gitignore already ignores ${entry}"
+    else
+        echo "$entry" >> "$gitignore_file"
+        echo -e "${PASS} Added ${entry} to .gitignore"
+    fi
+done
 
 # --- Write .validated ---
 shared_sha=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -154,5 +156,5 @@ echo -e "${PASS} Validation complete. You can now run:"
 echo -e "  ${WHITE}./run.sh${NC}     — watch + serve at localhost:3000"
 echo -e "  ${WHITE}./deploy.sh${NC}  — full production deploy"
 echo ""
-echo "Commit the symlinks to your project repo:"
-echo "  git add run.sh deploy.sh .gitignore && git commit -m \"Add symlinks to shared scripts\""
+echo "If .gitignore was updated, commit it:"
+echo "  git add .gitignore && git commit -m \"Gitignore local script symlinks and .validated\""
