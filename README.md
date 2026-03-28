@@ -11,9 +11,8 @@ Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 ## Adding this to a new project
 
 1. `git submodule add https://github.com/thomcowell/nanoc-shared-scripts nanoc-shared-scripts`
-2. Replace `.github/workflows/deploy.yml` with the caller pattern below
-3. Run `bash ./nanoc-shared-scripts/validate.sh` (adds `.validated` to `.gitignore` automatically)
-4. Commit the symlinks: `git add run.sh deploy.sh .gitignore && git commit -m "Add symlinks to shared scripts"`
+2. Run `bash ./nanoc-shared-scripts/validate.sh` (creates `.github/workflows/deploy.yml`, adds `.validated` to `.gitignore`, and creates symlinks automatically)
+3. Commit: `git add run.sh deploy.sh .gitignore .github/workflows/deploy.yml && git commit -m "Add shared scripts"`
 
 ## Updating to the latest scripts
 
