@@ -65,14 +65,15 @@ Full production deploy pipeline. Must be run from the project root
 
 **Pipeline:**
 1. Wipes `output/` and recompiles from scratch (`nanoc compile`)
-2. Checks AWS credentials (`sts get-caller-identity`; falls back to `aws login`)
+2. Checks `awscli` is installed (installs via brew on macOS if missing)
 3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `nanoc.yaml`
-4. Generates SHA256 hashes of all files in `output/`
-5. Compares against `.deployed` (previous deploy hashes) — uploads only changed/new files
-6. Deletes from S3 any files present in `.deployed` but absent from `output/`
-7. Invalidates only the changed/deleted paths on CloudFront (not `/*`)
-8. Saves updated hashes to `.deployed` and commits it as `*** Release YYYY-MM-DD ***`
-9. Creates a sequential release tag (`YYYY-MM-DD-NN`) and pushes
+4. Checks AWS credentials (`sts get-caller-identity`; locally falls back to `aws login --region`; in CI exits on failure)
+5. Generates SHA256 hashes of all files in `output/`
+6. Compares against `.deployed` (previous deploy hashes) — uploads only changed/new files
+7. Deletes from S3 any files present in `.deployed` but absent from `output/`
+8. Invalidates only the changed/deleted paths on CloudFront (not `/*`)
+9. Saves updated hashes to `.deployed` and commits it as `*** Release YYYY-MM-DD ***`
+10. Creates a sequential release tag (`YYYY-MM-DD-NN`) and pushes
 
 **Dependencies on the consumer project (must exist in CWD):**
 - `nanoc.yaml` — deploy config (`s3_bucket`, `cloudfront_distribution_id`, `aws_region`)
@@ -84,14 +85,17 @@ Full production deploy pipeline. Must be run from the project root
 One-time setup verification. Run after adding the submodule to a new project,
 or after a significant submodule update.
 
-Checks: `nanoc.yaml` present + keys set, `.ruby-version` present,
-`.github/workflows/deploy.yml` present and references `nanoc-shared-scripts`, AWS credentials reachable.
+Checks:
+- `nanoc.yaml` present and contains `s3_bucket`, `cloudfront_distribution_id`, `aws_region`
+- `.ruby-version` present
+- `.github/workflows/deploy.yml` present (copies from `templates/deploy.yml` if missing) and contains the string `nanoc-shared-scripts` (satisfied by the `bash ./nanoc-shared-scripts/deploy.sh` run step)
+- `deploy.sh`, `run.sh`, `shared.sh`, `validate.sh` are executable
+- AWS credentials reachable via `sts get-caller-identity`
 
 On success writes `.validated` to the project root with a timestamp and the
-shared scripts git SHA, copies `templates/deploy.yml` to `.github/workflows/deploy.yml`
-if missing, creates symlinks `run.sh` and `deploy.sh` at the project root, and adds
-`.validated`, `run.sh`, and `deploy.sh` to `.gitignore`. All three symlink/validated
-files are local machine state only — recreated by validate on each machine.
+shared scripts git SHA, creates symlinks `run.sh` and `deploy.sh` at the project
+root, and adds `.validated`, `run.sh`, and `deploy.sh` to `.gitignore`. All three
+are local machine state only — recreated by validate on each machine.
 
 ```bash
 bash ./nanoc-shared-scripts/validate.sh
@@ -118,7 +122,7 @@ Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`
 
 **Permissions:** `contents: write` at workflow level (to push `.deployed` commit, release tags, and the merge back to `main`).
 
-**Note:** The workflow runs all steps directly on `ubuntu-latest` — there is no separate reusable workflow in this repo. `submodules: recursive` ensures the nanoc-shared-scripts submodule is checked out in the consumer project.
+**Note:** The workflow runs all steps directly on `ubuntu-latest` — there is no separate reusable workflow in this repo. `submodules: recursive` ensures the nanoc-shared-scripts submodule is checked out in the consumer project. The `workflow_call` trigger allows the workflow to be called from another workflow in the consumer repo if needed (secrets must be passed by the caller).
 
 ---
 
@@ -128,7 +132,7 @@ Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`
 - CI skips all setup checks when `$CI` env var is set
 - `current_dir` is set to `$PWD` in `shared.sh` — scripts must always be run from the project root
 - Hash commands handle both platforms via `sha256_file()`: `sha256sum` (Linux) and `shasum -a 256` (macOS)
-- Scripts source `shared.sh` using `source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"`
+- `deploy.sh` and `run.sh` resolve symlinks before sourcing `shared.sh` (they're accessed via symlinks from the project root); `validate.sh` uses the simpler `source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"` since it's always run directly
   — `shared.sh` must always live in the same directory as the scripts that source it
 - Colour/formatting constants (`PASS`, `FAIL`, etc.) are defined in `shared.sh`
 

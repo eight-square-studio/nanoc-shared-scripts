@@ -13,8 +13,8 @@ Note:
 ## Adding this to a new project
 
 1. `git submodule add https://github.com/eight-square-studio/nanoc-shared-scripts nanoc-shared-scripts`
-2. Run `bash ./nanoc-shared-scripts/validate.sh` (creates `.github/workflows/deploy.yml`, adds `.validated` to `.gitignore`, and creates symlinks automatically)
-3. Commit: `git add run.sh deploy.sh .gitignore .github/workflows/deploy.yml && git commit -m "Add shared scripts"`
+2. Run `bash ./nanoc-shared-scripts/validate.sh` (copies `deploy.yml` into `.github/workflows/`, adds `.validated` to `.gitignore`, and creates symlinks automatically)
+3. Commit: `git add .gitignore .github/workflows/deploy.yml nanoc-shared-scripts && git commit -m "Add shared scripts"`
 
 ## Updating to the latest scripts
 
@@ -75,13 +75,14 @@ containing `nanoc.yaml`).
 
 **What it does:**
 1. Wipes `output/` and recompiles from scratch
-2. Checks AWS credentials
+2. Checks `awscli` is installed (installs via brew on macOS if missing)
 3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `nanoc.yaml`
-4. Uploads only new/changed files to S3 (SHA256 hash comparison)
-5. Deletes from S3 any files removed since the last deploy
-6. Invalidates only the changed paths on CloudFront
-7. Commits `.deployed` as `*** Release YYYY-MM-DD ***`
-8. Creates and pushes a sequential release tag (`YYYY-MM-DD-NN`)
+4. Checks AWS credentials (locally falls back to `aws login`; in CI exits on failure)
+5. Uploads only new/changed files to S3 (SHA256 hash comparison)
+6. Deletes from S3 any files removed since the last deploy
+7. Invalidates only the changed paths on CloudFront
+8. Commits `.deployed` as `*** Release YYYY-MM-DD ***`
+9. Creates and pushes a sequential release tag (`YYYY-MM-DD-NN`)
 
 ### validate.sh — setup check
 
@@ -98,34 +99,47 @@ symlinks and adds all three to `.gitignore` — local machine state only, not co
 
 ## GitHub Actions
 
-A reusable workflow is provided at `.github/workflows/deploy.yml`.
+`validate.sh` copies `templates/deploy.yml` from this repo into your project at
+`.github/workflows/deploy.yml`. This is a self-contained workflow — it runs all
+steps directly and does not call back into this repo.
 
-Call it from your project's workflow:
+**Triggers:**
+- `push` to the `release` branch — primary trigger for production deploys
+- `workflow_call` — can be invoked from another workflow in your project if needed
 
-```yaml
-name: Deploy
-on:
-  push:
-    branches: [release]
+**What it does:** checkout (full history + recursive submodules) → Ruby setup →
+`bundle install` → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` →
+merge `release` back into `main`
 
-permissions:
-  contents: write
+### Secrets required
 
-jobs:
-  deploy:
-    uses: eight-square-studio/nanoc-shared-scripts/.github/workflows/deploy.yml@main
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-```
+Set these in GitHub repo Settings → Secrets and variables → Actions:
 
-Triggers on push to the `release` branch. After deploying, merges `release`
-back into `main` so the `.deployed` commit and release tag are on both branches.
+| Secret | Value |
+|--------|-------|
+| `AWS_ACCESS_KEY_ID` | IAM access key with S3 + CloudFront permissions |
+| `AWS_SECRET_ACCESS_KEY` | Corresponding secret key |
+| `AWS_REGION` | e.g. `eu-west-1` |
 
-**Secrets required** (set in GitHub repo Settings → Secrets):
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_REGION`
+### Private submodule access (GH_PAT)
+
+If `nanoc-shared-scripts` is a private repo, CI needs a `GH_PAT` secret to check
+it out. Without it the action will fail with "repository not found".
+
+1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)**
+2. Click **Generate new token (classic)**
+3. Give it a descriptive name, e.g. `my-project CI`
+4. Set an expiry (90 days recommended — rotate when it expires)
+5. Tick **`repo`** scope (grants full repo access including private repos)
+6. Click **Generate token** and copy it immediately
+
+Then add it to your consumer repo:
+
+1. Go to the repo on GitHub → **Settings → Secrets and variables → Actions**
+2. Click **New repository secret**
+3. Name: `GH_PAT`, Value: paste the token
+4. Click **Add secret**
+
+### Actions permissions
 
 The repo also needs **read + write** permissions for Actions (Settings → Actions → General).
