@@ -48,21 +48,37 @@ else
     check_fail ".ruby-version not found"
 fi
 
-# --- Check: .github/workflows/deploy.yml exists ---
+# --- Check: .github/workflows/deploy.yml exists; create if missing ---
 workflow_file="$current_dir/.github/workflows/deploy.yml"
 if [[ -f "$workflow_file" ]]; then
     check_pass ".github/workflows/deploy.yml found"
 else
-    check_fail ".github/workflows/deploy.yml not found"
+    mkdir -p "$current_dir/.github/workflows"
+    cat > "$workflow_file" <<'EOF'
+name: Deploy
+on:
+  push:
+    branches:
+      - release
+
+jobs:
+  deploy:
+    uses: thomcowell/nanoc-shared-scripts/.github/workflows/deploy.yml@main
+    permissions:
+      contents: write
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+EOF
+    check_pass ".github/workflows/deploy.yml created"
 fi
 
 # --- Check: deploy.yml calls the shared reusable workflow ---
-if [[ -f "$workflow_file" ]]; then
-    if grep -q "nanoc-shared-scripts" "$workflow_file"; then
-        check_pass "deploy.yml calls the nanoc-shared-scripts reusable workflow"
-    else
-        check_fail "deploy.yml does not reference nanoc-shared-scripts — update it to use the reusable workflow"
-    fi
+if grep -q "nanoc-shared-scripts" "$workflow_file"; then
+    check_pass "deploy.yml calls the nanoc-shared-scripts reusable workflow"
+else
+    check_fail "deploy.yml does not reference nanoc-shared-scripts — update it to use the reusable workflow"
 fi
 
 # --- Check: shared scripts are executable ---
