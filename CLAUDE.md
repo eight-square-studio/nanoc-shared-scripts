@@ -138,11 +138,10 @@ release tags, and the merge back to `main`).
 ## Adding a new consumer project
 
 1. Add submodule: `git submodule add https://github.com/thomcowell/nanoc-shared-scripts scripts/shared`
-2. Add `.validated` to `.gitignore`
-3. Replace `.github/workflows/deploy.yml` with the caller pattern (see README.md)
-4. Run `bash ./scripts/shared/scripts/validate.sh`
-5. Commit the symlinks: `git add run.sh deploy.sh && git commit -m "Add symlinks to shared scripts"`
-6. Update the project's `CLAUDE.md` to note that scripts live in `scripts/shared/scripts/`
+2. Replace `.github/workflows/deploy.yml` with the caller pattern (see README.md)
+3. Run `bash ./scripts/shared/scripts/validate.sh` (adds `.validated` to `.gitignore` automatically)
+4. Commit the symlinks: `git add run.sh deploy.sh .gitignore && git commit -m "Add symlinks to shared scripts"`
+5. Update the project's `CLAUDE.md` to note that scripts live in `scripts/shared/scripts/`
 
 ## Updating scripts in a consumer project
 
