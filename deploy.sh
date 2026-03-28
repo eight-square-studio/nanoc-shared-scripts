@@ -79,7 +79,8 @@ function generate_file_hashes() {
         echo ""
         return
     fi
-    find "$output_dir" -type f ! -path '*/.*' -exec sha256_file {} \; \
+    find "$output_dir" -type f ! -path '*/.*' -print0 \
+        | while IFS= read -r -d '' file; do sha256_file "$file"; done \
         | sed "s|  ${output_dir}/|  |" \
         | LC_ALL=C sort
 }
