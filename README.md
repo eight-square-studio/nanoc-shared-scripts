@@ -17,8 +17,8 @@ Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 ## Updating to the latest scripts
 
 ```bash
-git submodule update --remote scripts/shared
-git add scripts/shared
+git submodule update --remote nanoc-shared-scripts
+git add nanoc-shared-scripts
 git commit -m "Update shared scripts to latest"
 ```
 
@@ -89,8 +89,8 @@ One-time verification after adding the submodule or updating it significantly.
 bash ./nanoc-shared-scripts/validate.sh
 ```
 
-Writes `.validated` to the project root on success (gitignored — local state only).
-Creates `run.sh` and `deploy.sh` symlinks at the project root — commit these.
+Writes `.validated` to the project root on success. Creates `run.sh` and `deploy.sh`
+symlinks and adds all three to `.gitignore` — local machine state only, not committed.
 
 ---
 

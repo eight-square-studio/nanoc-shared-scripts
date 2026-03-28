@@ -89,9 +89,9 @@ Checks: `nanoc.yaml` present + keys set, `.ruby-version` present,
 `.github/workflows/deploy.yml` present and references `nanoc-shared-scripts`, AWS credentials reachable.
 
 On success writes `.validated` to the project root with a timestamp and the
-shared scripts git SHA, and creates symlinks `run.sh` and `deploy.sh` at the
-project root pointing to the submodule scripts. Symlinks are committed to the
-project repo. `.validated` is gitignored — local machine state only.
+shared scripts git SHA, creates symlinks `run.sh` and `deploy.sh` at the project
+root, and adds `.validated`, `run.sh`, and `deploy.sh` to `.gitignore`. All three
+are local machine state only — recreated by validate on each machine.
 
 ```bash
 bash ./nanoc-shared-scripts/validate.sh
@@ -136,17 +136,16 @@ release tags, and the merge back to `main`).
 
 ## Adding a new consumer project
 
-1. Add submodule: `git submodule add https://github.com/thomcowell/nanoc-shared-scripts scripts/shared`
-2. Replace `.github/workflows/deploy.yml` with the caller pattern (see README.md)
-3. Run `bash ./nanoc-shared-scripts/validate.sh` (adds `.validated` to `.gitignore` automatically)
-4. Commit the symlinks: `git add run.sh deploy.sh .gitignore && git commit -m "Add symlinks to shared scripts"`
-5. Update the project's `CLAUDE.md` to note that scripts live in `nanoc-shared-scripts/`
+1. Add submodule: `git submodule add https://github.com/thomcowell/nanoc-shared-scripts nanoc-shared-scripts`
+2. Run `bash ./nanoc-shared-scripts/validate.sh` (creates workflow, gitignores local files, creates symlinks)
+3. Commit: `git add .gitignore .github/workflows/deploy.yml nanoc-shared-scripts && git commit -m "Add shared scripts"`
+4. Update the project's `CLAUDE.md` to note that scripts live in `nanoc-shared-scripts/`
 
 ## Updating scripts in a consumer project
 
 ```bash
-git submodule update --remote scripts/shared
-git add scripts/shared
+git submodule update --remote nanoc-shared-scripts
+git add nanoc-shared-scripts
 git commit -m "Update shared scripts to latest"
 ```
 
