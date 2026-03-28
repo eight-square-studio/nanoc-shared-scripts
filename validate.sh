@@ -69,9 +69,9 @@ fi
 for script in deploy.sh run.sh shared.sh validate.sh; do
     script_path="$SCRIPT_DIR/${script}"
     if [[ -x "$script_path" ]]; then
-        check_pass "scripts/${script} is executable"
+        check_pass "${script} is executable"
     else
-        check_fail "scripts/${script} is not executable — run: chmod +x scripts/shared/scripts/${script}"
+        check_fail "${script} is not executable — run: chmod +x nanoc-shared-scripts/${script}"
     fi
 done
 
@@ -114,7 +114,7 @@ echo -e "${PASS} Written: .validated"
 
 # --- Create symlinks at project root ---
 for script in run.sh deploy.sh; do
-    target="scripts/shared/scripts/${script}"
+    target="nanoc-shared-scripts/${script}"
     link="$current_dir/${script}"
     if [[ -L "$link" ]]; then
         existing_target=$(readlink "$link")
@@ -139,4 +139,4 @@ echo -e "  ${WHITE}./run.sh${NC}     — watch + serve at localhost:3000"
 echo -e "  ${WHITE}./deploy.sh${NC}  — full production deploy"
 echo ""
 echo "Commit the symlinks to your project repo:"
-echo "  git add run.sh deploy.sh && git commit -m \"Add symlinks to shared scripts\""
+echo "  git add run.sh deploy.sh .gitignore && git commit -m \"Add symlinks to shared scripts\""

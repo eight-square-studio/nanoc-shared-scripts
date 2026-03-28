@@ -1,7 +1,7 @@
 # nanoc-shared-scripts — Claude Code Guide
 
 Shell scripts and GitHub Actions reusable workflow for nanoc static sites.
-Consumed by nanoc project repos via git submodule at `scripts/shared/`.
+Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 
 > **Maintenance:** Keep this file up to date when scripts change behaviour,
 > new flags are added, or the reusable workflow is modified.
@@ -11,11 +11,10 @@ Consumed by nanoc project repos via git submodule at `scripts/shared/`.
 ## Repo structure
 
 ```
-scripts/
-  shared.sh     # Sourced by all other scripts — setup functions, colours, vars
-  deploy.sh     # S3 sync, CloudFront invalidation, release tagging
-  run.sh        # Watch + serve (default) or one-off compile (--no-watch)
-  validate.sh   # One-time setup check; writes .validated and creates symlinks
+shared.sh     # Sourced by all other scripts — setup functions, colours, vars
+deploy.sh     # S3 sync, CloudFront invalidation, release tagging
+run.sh        # Watch + serve (default) or one-off compile (--no-watch)
+validate.sh   # One-time setup check; writes .validated and creates symlinks
 .github/
   workflows/
     deploy.yml  # Reusable workflow — called by consumer repos
@@ -95,7 +94,7 @@ project root pointing to the submodule scripts. Symlinks are committed to the
 project repo. `.validated` is gitignored — local machine state only.
 
 ```bash
-bash ./scripts/shared/scripts/validate.sh
+bash ./nanoc-shared-scripts/validate.sh
 ```
 
 ---
@@ -115,7 +114,7 @@ uses: thomcowell/nanoc-shared-scripts/.github/workflows/deploy.yml@main
 - `AWS_REGION`
 
 **What it does:** checkout (full history + submodules) → Ruby setup → `bundle install`
-→ git identity → AWS credentials → `bash ./scripts/shared/scripts/deploy.sh`
+→ git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh`
 → merge `release` → `main`
 
 **Permissions needed in caller:** `contents: write` (to push `.deployed` commit,
@@ -139,9 +138,9 @@ release tags, and the merge back to `main`).
 
 1. Add submodule: `git submodule add https://github.com/thomcowell/nanoc-shared-scripts scripts/shared`
 2. Replace `.github/workflows/deploy.yml` with the caller pattern (see README.md)
-3. Run `bash ./scripts/shared/scripts/validate.sh` (adds `.validated` to `.gitignore` automatically)
+3. Run `bash ./nanoc-shared-scripts/validate.sh` (adds `.validated` to `.gitignore` automatically)
 4. Commit the symlinks: `git add run.sh deploy.sh .gitignore && git commit -m "Add symlinks to shared scripts"`
-5. Update the project's `CLAUDE.md` to note that scripts live in `scripts/shared/scripts/`
+5. Update the project's `CLAUDE.md` to note that scripts live in `nanoc-shared-scripts/`
 
 ## Updating scripts in a consumer project
 

@@ -1,7 +1,7 @@
 # nanoc-shared-scripts
 
 Shell scripts and a reusable GitHub Actions workflow for nanoc static sites.
-Consumed by nanoc project repos via git submodule at `scripts/shared/`.
+Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 
 > macOS-primary. Setup checks require Homebrew and rbenv. All setup is skipped
 > in CI environments (`$CI` env var).
@@ -10,9 +10,9 @@ Consumed by nanoc project repos via git submodule at `scripts/shared/`.
 
 ## Adding this to a new project
 
-1. `git submodule add https://github.com/thomcowell/nanoc-shared-scripts scripts/shared`
+1. `git submodule add https://github.com/thomcowell/nanoc-shared-scripts nanoc-shared-scripts`
 2. Replace `.github/workflows/deploy.yml` with the caller pattern above
-3. Run `bash ./scripts/shared/scripts/validate.sh` (adds `.validated` to `.gitignore` automatically)
+3. Run `bash ./nanoc-shared-scripts/validate.sh` (adds `.validated` to `.gitignore` automatically)
 4. Commit the symlinks: `git add run.sh deploy.sh .gitignore && git commit -m "Add symlinks to shared scripts"`
 
 ## Updating to the latest scripts
@@ -33,7 +33,7 @@ After adding this repo as a submodule, run the validation script from the
 project root to confirm everything is wired up correctly:
 
 ```bash
-bash ./scripts/shared/scripts/validate.sh
+bash ./nanoc-shared-scripts/validate.sh
 ```
 
 This checks your `nanoc.yaml` config, `.ruby-version`, GitHub Actions workflow,
@@ -49,9 +49,9 @@ and AWS credentials, then writes a `.validated` timestamp file and creates
 Sets up the environment and compiles the site.
 
 ```bash
-./scripts/shared/scripts/run.sh              # watch mode + local server (default)
-./scripts/shared/scripts/run.sh --no-watch   # one-off compile, then exit
-./scripts/shared/scripts/run.sh --clean      # wipe output/ before running
+./nanoc-shared-scripts/run.sh              # watch mode + local server (default)
+./nanoc-shared-scripts/run.sh --no-watch   # one-off compile, then exit
+./nanoc-shared-scripts/run.sh --clean      # wipe output/ before running
 ```
 
 | Flag | Short | Effect |
@@ -69,7 +69,7 @@ Full deploy pipeline. Must be run from the project root (the directory
 containing `nanoc.yaml`).
 
 ```bash
-./scripts/shared/scripts/deploy.sh
+./nanoc-shared-scripts/deploy.sh
 ```
 
 **What it does:**
@@ -87,7 +87,7 @@ containing `nanoc.yaml`).
 One-time verification after adding the submodule or updating it significantly.
 
 ```bash
-bash ./scripts/shared/scripts/validate.sh
+bash ./nanoc-shared-scripts/validate.sh
 ```
 
 Writes `.validated` to the project root on success (gitignored — local state only).
