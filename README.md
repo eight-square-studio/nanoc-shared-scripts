@@ -3,8 +3,10 @@
 Shell scripts and a reusable GitHub Actions workflow for nanoc static sites.
 Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 
-> macOS-primary. Setup checks require Homebrew and rbenv. All setup is skipped
-> in CI environments (`$CI` env var).
+Note:
+- macOS-primary, can be adapted to *nix environments.
+- Setup currently checks require Homebrew and rbenv installed.
+- All setup is skipped in CI environments (`$CI` env var).
 
 ---
 
