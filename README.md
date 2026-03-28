@@ -8,6 +8,26 @@ Consumed by nanoc project repos via git submodule at `scripts/shared/`.
 
 ---
 
+## Adding this to a new project
+
+1. `git submodule add https://github.com/thomcowell/nanoc-shared-scripts scripts/shared`
+2. Add `.validated` to `.gitignore`
+3. Replace `.github/workflows/deploy.yml` with the caller pattern above
+4. Run `bash ./scripts/shared/scripts/validate.sh`
+5. Commit the symlinks: `git add run.sh deploy.sh && git commit -m "Add symlinks to shared scripts"`
+
+## Updating to the latest scripts
+
+```bash
+git submodule update --remote scripts/shared
+git add scripts/shared
+git commit -m "Update shared scripts to latest"
+```
+
+Re-run `validate.sh` after a significant update.
+
+---
+
 ## First-time setup
 
 After adding this repo as a submodule, run the validation script from the
@@ -108,23 +128,3 @@ back into `main` so the `.deployed` commit and release tag are on both branches.
 - `AWS_REGION`
 
 The repo also needs **read + write** permissions for Actions (Settings → Actions → General).
-
----
-
-## Adding this to a new project
-
-1. `git submodule add https://github.com/thomcowell/nanoc-shared-scripts scripts/shared`
-2. Add `.validated` to `.gitignore`
-3. Replace `.github/workflows/deploy.yml` with the caller pattern above
-4. Run `bash ./scripts/shared/scripts/validate.sh`
-5. Commit the symlinks: `git add run.sh deploy.sh && git commit -m "Add symlinks to shared scripts"`
-
-## Updating to the latest scripts
-
-```bash
-git submodule update --remote scripts/shared
-git add scripts/shared
-git commit -m "Update shared scripts to latest"
-```
-
-Re-run `validate.sh` after a significant update.
