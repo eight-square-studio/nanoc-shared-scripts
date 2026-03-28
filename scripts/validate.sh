@@ -65,6 +65,16 @@ if [[ -f "$workflow_file" ]]; then
     fi
 fi
 
+# --- Check: shared scripts are executable ---
+for script in deploy.sh run.sh shared.sh validate.sh; do
+    script_path="$SCRIPT_DIR/${script}"
+    if [[ -x "$script_path" ]]; then
+        check_pass "scripts/${script} is executable"
+    else
+        check_fail "scripts/${script} is not executable — run: chmod +x scripts/shared/scripts/${script}"
+    fi
+done
+
 # --- Check: AWS credentials reachable ---
 if aws sts get-caller-identity &>/dev/null; then
     check_pass "AWS credentials valid"
