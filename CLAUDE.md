@@ -15,9 +15,8 @@ shared.sh     # Sourced by all other scripts — setup functions, colours, vars
 deploy.sh     # S3 sync, CloudFront invalidation, release tagging
 run.sh        # Watch + serve (default) or one-off compile (--no-watch)
 validate.sh   # One-time setup check; writes .validated and creates symlinks
-.github/
-  workflows/
-    deploy.yml  # Reusable workflow — called by consumer repos
+templates/
+  deploy.yml  # Full workflow — copied into consumer projects by validate.sh
 CLAUDE.md
 README.md
 ```
@@ -89,9 +88,10 @@ Checks: `nanoc.yaml` present + keys set, `.ruby-version` present,
 `.github/workflows/deploy.yml` present and references `nanoc-shared-scripts`, AWS credentials reachable.
 
 On success writes `.validated` to the project root with a timestamp and the
-shared scripts git SHA, creates symlinks `run.sh` and `deploy.sh` at the project
-root, and adds `.validated`, `run.sh`, and `deploy.sh` to `.gitignore`. All three
-are local machine state only — recreated by validate on each machine.
+shared scripts git SHA, copies `templates/deploy.yml` to `.github/workflows/deploy.yml`
+if missing, creates symlinks `run.sh` and `deploy.sh` at the project root, and adds
+`.validated`, `run.sh`, and `deploy.sh` to `.gitignore`. All three symlink/validated
+files are local machine state only — recreated by validate on each machine.
 
 ```bash
 bash ./nanoc-shared-scripts/validate.sh
@@ -99,26 +99,26 @@ bash ./nanoc-shared-scripts/validate.sh
 
 ---
 
-## Reusable workflow (.github/workflows/deploy.yml)
+## Consumer workflow (templates/deploy.yml)
 
-Called by consumer repos via:
-```yaml
-uses: eight-square-studio/nanoc-shared-scripts/.github/workflows/deploy.yml@main
-```
+Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`.
 
-**Trigger:** `workflow_call` only — not triggered directly.
+**Triggers:**
+- `push` to `release` branch — primary trigger for production deploys
+- `workflow_call` — can also be called as a reusable workflow from another workflow
 
-**Secrets required (passed by caller):**
+**Secrets required:**
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_REGION`
 
-**What it does:** checkout (full history + submodules) → Ruby setup → `bundle install`
-→ git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh`
+**What it does:** checkout (full history + recursive submodules) → Ruby setup → `bundle install`
+→ nanoc version check → git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` (with `CI=true`)
 → merge `release` → `main`
 
-**Permissions needed in caller:** `contents: write` (to push `.deployed` commit,
-release tags, and the merge back to `main`).
+**Permissions:** `contents: write` at workflow level (to push `.deployed` commit, release tags, and the merge back to `main`).
+
+**Note:** The workflow runs all steps directly on `ubuntu-latest` — there is no separate reusable workflow in this repo. `submodules: recursive` ensures the nanoc-shared-scripts submodule is checked out in the consumer project.
 
 ---
 

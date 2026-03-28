@@ -54,24 +54,7 @@ if [[ -f "$workflow_file" ]]; then
     check_pass ".github/workflows/deploy.yml found"
 else
     mkdir -p "$current_dir/.github/workflows"
-    cat > "$workflow_file" <<'EOF'
-name: Deploy
-on:
-  push:
-    branches:
-      - release
-
-permissions:
-  contents: write
-
-jobs:
-  deploy:
-    uses: eight-square-studio/nanoc-shared-scripts/.github/workflows/deploy.yml@main
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-EOF
+    cp "$SCRIPT_DIR/templates/deploy.yml" "$workflow_file"
     check_pass ".github/workflows/deploy.yml created"
 fi
 
