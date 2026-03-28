@@ -114,7 +114,8 @@ for entry in .validated run.sh deploy.sh; do
     if grep -q "^${entry}$" "$gitignore_file" 2>/dev/null; then
         echo -e "${PASS} .gitignore already ignores ${entry}"
     else
-        echo "$entry" >> "$gitignore_file"
+        # printf ensures a newline before the entry even if the file lacks a trailing newline
+        printf "\n%s\n" "$entry" >> "$gitignore_file"
         echo -e "${PASS} Added ${entry} to .gitignore"
     fi
 done
