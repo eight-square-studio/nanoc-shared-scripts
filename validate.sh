@@ -63,7 +63,7 @@ on:
 
 jobs:
   deploy:
-    uses: thomcowell/nanoc-shared-scripts/.github/workflows/deploy.yml@main
+    uses: eight-square-studio/nanoc-shared-scripts/.github/workflows/deploy.yml@main
     permissions:
       contents: write
     secrets:

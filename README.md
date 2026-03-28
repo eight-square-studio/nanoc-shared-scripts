@@ -12,7 +12,7 @@ Note:
 
 ## Adding this to a new project
 
-1. `git submodule add https://github.com/thomcowell/nanoc-shared-scripts nanoc-shared-scripts`
+1. `git submodule add https://github.com/eight-square-studio/nanoc-shared-scripts nanoc-shared-scripts`
 2. Run `bash ./nanoc-shared-scripts/validate.sh` (creates `.github/workflows/deploy.yml`, adds `.validated` to `.gitignore`, and creates symlinks automatically)
 3. Commit: `git add run.sh deploy.sh .gitignore .github/workflows/deploy.yml && git commit -m "Add shared scripts"`
 
@@ -110,7 +110,7 @@ on:
 
 jobs:
   deploy:
-    uses: thomcowell/nanoc-shared-scripts/.github/workflows/deploy.yml@main
+    uses: eight-square-studio/nanoc-shared-scripts/.github/workflows/deploy.yml@main
     permissions:
       contents: write
     secrets:

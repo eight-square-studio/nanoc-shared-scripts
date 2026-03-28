@@ -103,7 +103,7 @@ bash ./nanoc-shared-scripts/validate.sh
 
 Called by consumer repos via:
 ```yaml
-uses: thomcowell/nanoc-shared-scripts/.github/workflows/deploy.yml@main
+uses: eight-square-studio/nanoc-shared-scripts/.github/workflows/deploy.yml@main
 ```
 
 **Trigger:** `workflow_call` only — not triggered directly.
@@ -136,7 +136,7 @@ release tags, and the merge back to `main`).
 
 ## Adding a new consumer project
 
-1. Add submodule: `git submodule add https://github.com/thomcowell/nanoc-shared-scripts nanoc-shared-scripts`
+1. Add submodule: `git submodule add https://github.com/eight-square-studio/nanoc-shared-scripts nanoc-shared-scripts`
 2. Run `bash ./nanoc-shared-scripts/validate.sh` (creates workflow, gitignores local files, creates symlinks)
 3. Commit: `git add .gitignore .github/workflows/deploy.yml nanoc-shared-scripts && git commit -m "Add shared scripts"`
 4. Update the project's `CLAUDE.md` to note that scripts live in `nanoc-shared-scripts/`
