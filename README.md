@@ -120,13 +120,14 @@ Set these in GitHub repo Settings → Secrets and variables → Actions:
 | `AWS_ACCESS_KEY_ID` | IAM access key with S3 + CloudFront permissions |
 | `AWS_SECRET_ACCESS_KEY` | Corresponding secret key |
 | `AWS_REGION` | e.g. `eu-west-1` |
+| `GH_PAT` | Personal access token (see instructions below) |
 
 ### Private submodule access (GH_PAT)
 
 If `nanoc-shared-scripts` is a private repo, CI needs a `GH_PAT` secret to check
 it out. Without it the action will fail with "repository not found".
 
-1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)**
+1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)** https://github.com/settings/tokens
 2. Click **Generate new token (classic)**
 3. Give it a descriptive name, e.g. `my-project CI`
 4. Set an expiry (90 days recommended — rotate when it expires)
