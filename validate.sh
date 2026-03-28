@@ -61,11 +61,12 @@ on:
     branches:
       - release
 
+permissions:
+  contents: write
+
 jobs:
   deploy:
     uses: eight-square-studio/nanoc-shared-scripts/.github/workflows/deploy.yml@main
-    permissions:
-      contents: write
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
