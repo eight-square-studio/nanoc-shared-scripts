@@ -92,6 +92,15 @@ if [[ $FAIL_COUNT -gt 0 ]]; then
     exit 1
 fi
 
+# --- Ensure .validated is gitignored ---
+gitignore_file="$current_dir/.gitignore"
+if [[ -f "$gitignore_file" ]] && grep -q "^\.validated$" "$gitignore_file"; then
+    echo -e "${PASS} .gitignore already ignores .validated"
+else
+    echo ".validated" >> "$gitignore_file"
+    echo -e "${PASS} Added .validated to .gitignore"
+fi
+
 # --- Write .validated ---
 shared_sha=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 project_name=$(basename "$current_dir")
