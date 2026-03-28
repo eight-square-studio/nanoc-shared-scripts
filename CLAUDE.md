@@ -87,7 +87,7 @@ One-time setup verification. Run after adding the submodule to a new project,
 or after a significant submodule update.
 
 Checks: `nanoc.yaml` present + keys set, `.ruby-version` present,
-`.github/workflows/deploy.yml` present and uses `workflow_call`, AWS credentials reachable.
+`.github/workflows/deploy.yml` present and references `nanoc-shared-scripts`, AWS credentials reachable.
 
 On success writes `.validated` to the project root with a timestamp and the
 shared scripts git SHA, and creates symlinks `run.sh` and `deploy.sh` at the

@@ -56,12 +56,12 @@ else
     check_fail ".github/workflows/deploy.yml not found"
 fi
 
-# --- Check: deploy.yml uses workflow_call (reusable workflow pattern) ---
+# --- Check: deploy.yml calls the shared reusable workflow ---
 if [[ -f "$workflow_file" ]]; then
-    if grep -q "workflow_call" "$workflow_file"; then
-        check_pass "deploy.yml uses workflow_call (reusable workflow)"
+    if grep -q "nanoc-shared-scripts" "$workflow_file"; then
+        check_pass "deploy.yml calls the nanoc-shared-scripts reusable workflow"
     else
-        check_fail "deploy.yml does not use workflow_call — update it to call the reusable workflow"
+        check_fail "deploy.yml does not reference nanoc-shared-scripts — update it to use the reusable workflow"
     fi
 fi
 
