@@ -1,6 +1,10 @@
 #!/bin/bash
 # Setup environment and run nanoc — watch + serve by default, or compile only with --no-watch
-source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"
+
+# Resolve symlinks to find the real script directory
+_s="${BASH_SOURCE[0]}"
+while [[ -L "$_s" ]]; do _d="$(cd "$(dirname "$_s")" && pwd)"; _s="$(readlink "$_s")"; [[ "$_s" != /* ]] && _s="$_d/$_s"; done
+source "$(cd "$(dirname "$_s")" && pwd)/shared.sh"
 
 if [[ ! -f "nanoc.yaml" ]]; then
     echo "Error: must be run from the project root (nanoc.yaml not found)"
