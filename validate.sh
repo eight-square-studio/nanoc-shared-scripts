@@ -48,14 +48,14 @@ else
     check_fail ".ruby-version not found"
 fi
 
-# --- Check: .github/workflows/deploy.yml exists; create if missing ---
+# --- Check: .github/workflows/deploy.yml exists; copy/update from template ---
 workflow_file="$current_dir/.github/workflows/deploy.yml"
-if [[ -f "$workflow_file" ]]; then
-    check_pass ".github/workflows/deploy.yml found"
+mkdir -p "$current_dir/.github/workflows"
+if [[ -f "$workflow_file" ]] && diff -q "$workflow_file" "$SCRIPT_DIR/templates/deploy.yml" &>/dev/null; then
+    check_pass ".github/workflows/deploy.yml is up to date"
 else
-    mkdir -p "$current_dir/.github/workflows"
     cp "$SCRIPT_DIR/templates/deploy.yml" "$workflow_file"
-    check_pass ".github/workflows/deploy.yml created"
+    check_pass ".github/workflows/deploy.yml updated from template"
 fi
 
 # --- Check: deploy.yml calls the shared reusable workflow ---
