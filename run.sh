@@ -12,7 +12,7 @@ if [[ ! -f "nanoc.yaml" ]]; then
 fi
 
 function print_help() {
-    echo -e "Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-h|--help]
+    echo -e "Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-o|--host HOST] [-p|--port PORT] [-h|--help]
 
 Sets up the environment and starts nanoc.
 
@@ -20,13 +20,18 @@ By default, compiles in watch mode and serves at http://localhost:3000.
 Use --no-watch to do a one-off compile with no file watching or server.
 
 Options:
-  -c, --clean     Remove output/ before running
-  -n, --no-watch  Compile once only (no watch, no serve)
-  -h, --help      Show this help message"
+  -c, --clean      Remove output/ before running
+  -n, --no-watch   Compile once only (no watch, no serve)
+  -o, --host HOST  Bind the server to HOST (default: 127.0.0.1)
+                   Use 0.0.0.0 to listen on all interfaces
+  -p, --port PORT  Listen on PORT (default: 3000)
+  -h, --help       Show this help message"
 }
 
 CLEAN=false
 WATCH=true
+HOST="127.0.0.1"
+PORT="3000"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -c|--clean)
@@ -36,6 +41,14 @@ while [[ $# -gt 0 ]]; do
         -n|--no-watch)
             WATCH=false
             shift
+            ;;
+        -o|--host)
+            HOST="$2"
+            shift 2
+            ;;
+        -p|--port)
+            PORT="$2"
+            shift 2
             ;;
         -h|--help)
             print_help
@@ -57,9 +70,13 @@ fi
 initiate
 
 if [[ "$WATCH" == true ]]; then
-    echo -e "${PASS} Running nanoc compile, view and watch..."
+    while lsof -i :"$PORT" -sTCP:LISTEN &>/dev/null; do
+        echo -e "${WARN} Port ${PORT} is in use, trying $((PORT + 1))..."
+        PORT=$((PORT + 1))
+    done
+    echo -e "${PASS} Running nanoc compile, view and watch (${HOST}:${PORT})..."
     bundle exec nanoc compile -W &
-    bundle exec nanoc view -L
+    bundle exec nanoc view -L -o "$HOST" -p "$PORT"
 else
     echo -e "${PASS} Running nanoc compile..."
     bundle exec nanoc compile

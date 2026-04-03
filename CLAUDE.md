@@ -47,11 +47,13 @@ All scripts must be run from the project root; `deploy.sh` and `run.sh` enforce 
 Sets up the environment then compiles the site.
 
 ```
-Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-h|--help]
+Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-o|--host HOST] [-p|--port PORT] [-h|--help]
 
-  -c, --clean     Remove output/ before running
-  -n, --no-watch  Compile once only (no watch, no serve)
-  -h, --help      Show this help message
+  -c, --clean      Remove output/ before running
+  -n, --no-watch   Compile once only (no watch, no serve)
+  -o, --host HOST  Bind the server to HOST (default: 127.0.0.1; use 0.0.0.0 for all interfaces)
+  -p, --port PORT  Listen on PORT (default: 3000)
+  -h, --help       Show this help message
 ```
 
 Default (no flags): runs `nanoc compile -W` in the background and `nanoc view -L`
