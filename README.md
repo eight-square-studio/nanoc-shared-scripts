@@ -50,16 +50,24 @@ and AWS credentials, then writes a `.validated` timestamp file and creates
 Sets up the environment and compiles the site.
 
 ```bash
-./nanoc-shared-scripts/run.sh              # watch mode + local server (default)
-./nanoc-shared-scripts/run.sh --no-watch   # one-off compile, then exit
-./nanoc-shared-scripts/run.sh --clean      # wipe output/ before running
+./nanoc-shared-scripts/run.sh                        # watch mode + local server (default)
+./nanoc-shared-scripts/run.sh --no-watch             # one-off compile, then exit
+./nanoc-shared-scripts/run.sh --clean                # wipe output/ before running
+./nanoc-shared-scripts/run.sh --host 0.0.0.0         # listen on all interfaces (LAN/VPN)
+./nanoc-shared-scripts/run.sh --port 3003            # use a custom port default 3000
+./nanoc-shared-scripts/run.sh -o 0.0.0.0 -p 3003     # combine host + port
 ```
 
 | Flag | Short | Effect |
 |------|-------|--------|
-| `--no-watch` | `-n` | Compile once only, no file watching, no server |
 | `--clean` | `-c` | Remove `output/` before running |
+| `--no-watch` | `-n` | Compile once only, no file watching, no server |
+| `--host HOST` | `-o` | Bind the server to HOST (default: `127.0.0.1`). Use `0.0.0.0` to listen on all interfaces (useful for accessing the site from other devices on your network or over a Tailscale VPN) |
+| `--port PORT` | `-p` | Listen on PORT (default: `3000`) |
 | `--help` | `-h` | Show usage |
+
+If the chosen port is already in use, the script automatically increments until
+it finds a free one.
 
 Default (no flags): starts `nanoc compile -W` in watch mode and serves at
 `http://localhost:3000`.

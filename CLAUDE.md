@@ -3,8 +3,11 @@
 Shell scripts and GitHub Actions reusable workflow for nanoc static sites.
 Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 
-> **Maintenance:** Keep this file up to date when scripts change behaviour,
-> new flags are added, or the reusable workflow is modified.
+> **Maintenance:** When scripts change behaviour, new flags are added, or the
+> reusable workflow is modified, update **all three** docs:
+> - `CLAUDE.md` — this file
+> - `README.md` — user-facing usage examples and flag tables
+> - `CHANGELOG.md` — add an entry under today's date (group with existing entries if the date already exists)
 
 ---
 
