@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-04-17
+
+- Add `vs_code_server.sh` — restarts Tailscale and launches VS Code web server for remote browser access
+
 ## 2026-04-03
 
 - Add `--host` and `--port` flags to `run.sh` for binding to custom addresses
