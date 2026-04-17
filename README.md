@@ -92,6 +92,21 @@ containing `nanoc.yaml`).
 8. Commits `.deployed` as `*** Release YYYY-MM-DD ***`
 9. Creates and pushes a sequential release tag (`YYYY-MM-DD-NN`)
 
+### vs_code_server.sh — remote VS Code access
+
+Restarts Tailscale and launches VS Code as a web server for remote browser-based
+access.
+
+```bash
+./nanoc-shared-scripts/vs_code_server.sh
+```
+
+**What it does:**
+1. Restarts Tailscale (`tailscale down` → `tailscale up`) — skips if Tailscale not installed
+2. Launches `code serve-web` on `0.0.0.0:8000` with no connection token — skips if `code` not installed
+
+Access VS Code in a browser at `http://<machine-ip>:8000` (e.g. via Tailscale or Network IP).
+
 ### validate.sh — setup check
 
 One-time verification after adding the submodule or updating it significantly.
