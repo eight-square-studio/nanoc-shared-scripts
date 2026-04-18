@@ -56,7 +56,7 @@ Sets up the environment and compiles the site.
 ./nanoc-shared-scripts/run.sh --host 0.0.0.0         # listen on all interfaces (LAN/VPN)
 ./nanoc-shared-scripts/run.sh --port 3003            # use a custom port (default 3000)
 ./nanoc-shared-scripts/run.sh -o 0.0.0.0 -p 3003     # combine host + port
-./nanoc-shared-scripts/run.sh --vscode               # restart Tailscale + launch VS Code web server, then run nanoc
+./nanoc-shared-scripts/run.sh --vscode               # restart Tailscale + launch VS Code web server (no nanoc)
 ./nanoc-shared-scripts/run.sh --restart-tailscale    # restart Tailscale and exit
 ```
 
@@ -66,7 +66,7 @@ Sets up the environment and compiles the site.
 | `--no-watch` | `-n` | Compile once only, no file watching, no server |
 | `--host HOST` | `-o` | Bind the server to HOST (default: `127.0.0.1`). Use `0.0.0.0` to listen on all interfaces (useful for accessing the site from other devices on your network or over a Tailscale VPN) |
 | `--port PORT` | `-p` | Listen on PORT (default: `3000`) |
-| `--vscode` | | Restart Tailscale, then launch `code serve-web` on `VSCODE_PORT` (default `8000`) in the background before starting nanoc. Exits with an error if port `8000` is already in use. Skips Tailscale/VS Code gracefully if not installed |
+| `--vscode` | | Restart Tailscale, then run `code serve-web` on `VSCODE_PORT` (default `8000`) in the foreground — blocks until VS Code exits. No nanoc. Exits with an error if port `8000` is already in use. Skips Tailscale/VS Code gracefully if not installed |
 | `--restart-tailscale` | | Restart Tailscale (`tailscale down` → `tailscale up`) and exit — no nanoc, no VS Code |
 | `--help` | `-h` | Show usage |
 

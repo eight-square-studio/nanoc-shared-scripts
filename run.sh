@@ -25,7 +25,7 @@ Options:
   -o, --host HOST        Bind the server to HOST (default: 127.0.0.1)
                          Use 0.0.0.0 to listen on all interfaces
   -p, --port PORT        Listen on PORT (default: 3000)
-  --vscode               Restart Tailscale then launch VS Code web server on port ${VSCODE_PORT} (background)
+  --vscode               Restart Tailscale then launch VS Code web server on port ${VSCODE_PORT} (no nanoc)
   --restart-tailscale    Restart Tailscale and exit (no nanoc, no VS Code)
   -h, --help             Show this help message"
 }
@@ -109,21 +109,21 @@ if [[ "$VSCODE" == true ]]; then
             exit 1
         fi
         echo -e "${PASS} Starting VS Code web server on port ${VSCODE_PORT}..."
-        code serve-web --host 0.0.0.0 --port "$VSCODE_PORT" --without-connection-token --accept-server-license-terms &
+        code serve-web --host 0.0.0.0 --port "$VSCODE_PORT" --without-connection-token --accept-server-license-terms
     else
         echo -e "${WARN} VS Code not found, skipping"
     fi
-fi
-
-if [[ "$WATCH" == true ]]; then
-    while lsof -i :"$PORT" -sTCP:LISTEN &>/dev/null; do
-        echo -e "${WARN} Port ${PORT} is in use, trying $((PORT + 1))..."
-        PORT=$((PORT + 1))
-    done
-    echo -e "${PASS} Running nanoc compile, view and watch (${HOST}:${PORT})..."
-    bundle exec nanoc compile -W &
-    bundle exec nanoc view -L -o "$HOST" -p "$PORT"
 else
-    echo -e "${PASS} Running nanoc compile..."
-    bundle exec nanoc compile
+    if [[ "$WATCH" == true ]]; then
+        while lsof -i :"$PORT" -sTCP:LISTEN &>/dev/null; do
+            echo -e "${WARN} Port ${PORT} is in use, trying $((PORT + 1))..."
+            PORT=$((PORT + 1))
+        done
+        echo -e "${PASS} Running nanoc compile, view and watch (${HOST}:${PORT})..."
+        bundle exec nanoc compile -W &
+        bundle exec nanoc view -L -o "$HOST" -p "$PORT"
+    else
+        echo -e "${PASS} Running nanoc compile..."
+        bundle exec nanoc compile
+    fi
 fi

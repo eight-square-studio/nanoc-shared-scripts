@@ -56,7 +56,7 @@ Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-o|--host HOST] [-p|--port PORT] [
   -n, --no-watch         Compile once only (no watch, no serve)
   -o, --host HOST        Bind the server to HOST (default: 127.0.0.1; use 0.0.0.0 for all interfaces)
   -p, --port PORT        Listen on PORT (default: 3000)
-  --vscode               Restart Tailscale then launch VS Code web server on VSCODE_PORT=8000 in background
+  --vscode               Restart Tailscale then launch VS Code web server on VSCODE_PORT=8000 (no nanoc)
   --restart-tailscale    Restart Tailscale and exit (no nanoc, no VS Code)
   -h, --help             Show this help message
 ```
@@ -66,7 +66,7 @@ Default (no flags): runs `nanoc compile -W` in the background and `nanoc view -L
 
 With `--no-watch`: runs `nanoc compile` once and exits.
 
-With `--vscode`: restarts Tailscale, launches `code serve-web` on port `VSCODE_PORT` (default `8000`) in the background, then proceeds with nanoc as normal. Errors and exits if port `VSCODE_PORT` is already in use.
+With `--vscode`: restarts Tailscale, then runs `code serve-web` on port `VSCODE_PORT` (default `8000`) in the foreground — blocks until VS Code exits. No nanoc. Errors and exits if port `VSCODE_PORT` is already in use. Mutually exclusive with nanoc (`--vscode` and nanoc share an if/else branch).
 
 With `--restart-tailscale`: restarts Tailscale (`tailscale down` → `tailscale up`) and exits — no nanoc, no VS Code.
 
