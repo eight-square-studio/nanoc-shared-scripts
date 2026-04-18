@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-04-18
+
+- Fix `validate_and_install_ruby()` — use `rbenv install --skip-existing` to suppress reinstall prompt when Ruby version already installed
+
 ## 2026-04-17
 
 - Add `vs_code_server.sh` — restarts Tailscale and launches VS Code web server for remote browser access

@@ -96,7 +96,7 @@ function validate_and_install_ruby(){
         cd ~/.rbenv/plugins/ruby-build
         git pull
         cd $current_dir
-        rbenv install $ruby_version
+        rbenv install --skip-existing $ruby_version
         rbenv rehash
     fi
 }
