@@ -16,7 +16,7 @@ Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 ```
 shared.sh     # Sourced by all other scripts — setup functions, colours, vars
 deploy.sh     # S3 sync, CloudFront invalidation, release tagging
-run.sh        # Watch + serve (default) or one-off compile (--no-watch)
+run.sh        # Watch + serve (default), one-off compile (--no-watch), VS Code server (--vscode)
 validate.sh   # One-time setup check; writes .validated and creates symlinks
 templates/
   deploy.yml  # Full workflow — copied into consumer projects by validate.sh
@@ -50,19 +50,25 @@ All scripts must be run from the project root; `deploy.sh` and `run.sh` enforce 
 Sets up the environment then compiles the site.
 
 ```
-Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-o|--host HOST] [-p|--port PORT] [-h|--help]
+Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-o|--host HOST] [-p|--port PORT] [--vscode] [--restart-tailscale] [-h|--help]
 
-  -c, --clean      Remove output/ before running
-  -n, --no-watch   Compile once only (no watch, no serve)
-  -o, --host HOST  Bind the server to HOST (default: 127.0.0.1; use 0.0.0.0 for all interfaces)
-  -p, --port PORT  Listen on PORT (default: 3000)
-  -h, --help       Show this help message
+  -c, --clean            Remove output/ before running
+  -n, --no-watch         Compile once only (no watch, no serve)
+  -o, --host HOST        Bind the server to HOST (default: 127.0.0.1; use 0.0.0.0 for all interfaces)
+  -p, --port PORT        Listen on PORT (default: 3000)
+  --vscode               Restart Tailscale then launch VS Code web server on VSCODE_PORT=8000 in background
+  --restart-tailscale    Restart Tailscale and exit (no nanoc, no VS Code)
+  -h, --help             Show this help message
 ```
 
 Default (no flags): runs `nanoc compile -W` in the background and `nanoc view -L`
 (watch mode + local server at http://localhost:3000).
 
 With `--no-watch`: runs `nanoc compile` once and exits.
+
+With `--vscode`: restarts Tailscale, launches `code serve-web` on port `VSCODE_PORT` (default `8000`) in the background, then proceeds with nanoc as normal. Errors and exits if port `VSCODE_PORT` is already in use.
+
+With `--restart-tailscale`: restarts Tailscale (`tailscale down` → `tailscale up`) and exits — no nanoc, no VS Code.
 
 ### deploy.sh
 Full production deploy pipeline. Must be run from the project root
