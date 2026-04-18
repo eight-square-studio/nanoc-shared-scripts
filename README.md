@@ -54,8 +54,10 @@ Sets up the environment and compiles the site.
 ./nanoc-shared-scripts/run.sh --no-watch             # one-off compile, then exit
 ./nanoc-shared-scripts/run.sh --clean                # wipe output/ before running
 ./nanoc-shared-scripts/run.sh --host 0.0.0.0         # listen on all interfaces (LAN/VPN)
-./nanoc-shared-scripts/run.sh --port 3003            # use a custom port default 3000
+./nanoc-shared-scripts/run.sh --port 3003            # use a custom port (default 3000)
 ./nanoc-shared-scripts/run.sh -o 0.0.0.0 -p 3003     # combine host + port
+./nanoc-shared-scripts/run.sh --vscode               # restart Tailscale + launch VS Code web server (no nanoc)
+./nanoc-shared-scripts/run.sh --restart-tailscale    # restart Tailscale and exit
 ```
 
 | Flag | Short | Effect |
@@ -64,9 +66,11 @@ Sets up the environment and compiles the site.
 | `--no-watch` | `-n` | Compile once only, no file watching, no server |
 | `--host HOST` | `-o` | Bind the server to HOST (default: `127.0.0.1`). Use `0.0.0.0` to listen on all interfaces (useful for accessing the site from other devices on your network or over a Tailscale VPN) |
 | `--port PORT` | `-p` | Listen on PORT (default: `3000`) |
+| `--vscode` | | Restart Tailscale, then run `code serve-web` on `VSCODE_PORT` (default `8000`) in the foreground — blocks until VS Code exits. No nanoc. Exits with an error if port `8000` is already in use. Skips Tailscale/VS Code gracefully if not installed |
+| `--restart-tailscale` | | Restart Tailscale (`tailscale down` → `tailscale up`) and exit — no nanoc, no VS Code |
 | `--help` | `-h` | Show usage |
 
-If the chosen port is already in use, the script automatically increments until
+If the chosen nanoc port is already in use, the script automatically increments until
 it finds a free one.
 
 Default (no flags): starts `nanoc compile -W` in watch mode and serves at
@@ -91,21 +95,6 @@ containing `nanoc.yaml`).
 7. Invalidates only the changed paths on CloudFront
 8. Commits `.deployed` as `*** Release YYYY-MM-DD ***`
 9. Creates and pushes a sequential release tag (`YYYY-MM-DD-NN`)
-
-### vs_code_server.sh — remote VS Code access
-
-Restarts Tailscale and launches VS Code as a web server for remote browser-based
-access.
-
-```bash
-./nanoc-shared-scripts/vs_code_server.sh
-```
-
-**What it does:**
-1. Restarts Tailscale (`tailscale down` → `tailscale up`) — skips if Tailscale not installed
-2. Launches `code serve-web` on `0.0.0.0:8000` with no connection token — skips if `code` not installed
-
-Access VS Code in a browser at `http://<machine-ip>:8000` (e.g. via Tailscale or Network IP).
 
 ### validate.sh — setup check
 

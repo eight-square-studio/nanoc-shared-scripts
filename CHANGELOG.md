@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-18
+
+- Merge `vs_code_server.sh` into `run.sh` — add `--vscode` flag (restart Tailscale + run VS Code web server on `VSCODE_PORT=8000` in foreground, mutually exclusive with nanoc) and `--restart-tailscale` flag (restart Tailscale and exit)
+- Delete `vs_code_server.sh`
+
 ## 2026-04-17
 
 - Add `vs_code_server.sh` — restarts Tailscale and launches VS Code web server for remote browser access
