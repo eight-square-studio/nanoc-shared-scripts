@@ -52,4 +52,6 @@ jobs:
           git checkout main
           git pull origin main
           git merge release --no-edit
+          git checkout release -- .deployed
+          git diff --cached --quiet || git commit -m "Sync .deployed from release"
           git push origin main
