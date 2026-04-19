@@ -87,7 +87,7 @@ function validate_and_install_ruby(){
     if [[ "${ruby_value}" == *"${ruby_version}"* ]]; then
         echo -e "${PASS} ruby ${ruby_version} is installed"
     else
-        (cd ~/.rbenv/plugins/ruby-build && git pull)
+        [[ -d ~/.rbenv/plugins/ruby-build ]] && (cd ~/.rbenv/plugins/ruby-build && git pull)
         rbenv install --skip-existing $ruby_version
         rbenv rehash
     fi
