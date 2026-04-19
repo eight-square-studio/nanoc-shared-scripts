@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-04-19
+
+- Add `set -euo pipefail` to `deploy.sh` and `run.sh`; `set -uo pipefail` to `validate.sh` (survey script intentionally continues past individual check failures)
+- Fix `validate_and_install_ruby()` — run `cd ~/.rbenv/plugins/ruby-build && git pull` in subshell to prevent working directory corruption on failure
+- Silence exit trap on successful exit — only print `exiting` message on non-zero exit status
+- Extract `restart_tailscale()` function in `run.sh` — eliminates duplicated Tailscale restart block between `--restart-tailscale` and `--vscode` paths
+- Remove `set -a` / `set +a` from `shared.sh` — variables need no export since `shared.sh` is sourced, not executed
+- Fix temp file leak in `get_changed_files()` — use `trap ... RETURN` so files are cleaned up even if the function exits early due to an error
+
 ## 2026-04-18
 
 - Fix `validate_and_install_ruby()` — use `rbenv install --skip-existing` to suppress reinstall prompt when Ruby version already installed

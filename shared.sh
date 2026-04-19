@@ -6,7 +6,6 @@ current_dir="$(pwd)"
 default_ruby_version="3.4.7"
 ruby_version=""
 
-set -a
 # Colours
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -20,12 +19,7 @@ FAIL="${RED} [FAIL]${NC}"
 WARN="${YELLOW} [WARNING]${NC}"
 PASS="${GREEN} [OK]${NC}"
 
-function exiting() {
-    local STATUS_CODE=$?
-    echo "exiting $0 with status code $STATUS_CODE"
-    exit $STATUS_CODE
-}
-trap exiting EXIT
+trap 'status=$?; [[ $status -ne 0 ]] && echo "exiting $0 with status code $status"' EXIT
 
 function sha256_file() {
     # Cross-platform SHA256: Linux uses sha256sum, macOS uses shasum -a 256
@@ -93,9 +87,7 @@ function validate_and_install_ruby(){
     if [[ "${ruby_value}" == *"${ruby_version}"* ]]; then
         echo -e "${PASS} ruby ${ruby_version} is installed"
     else
-        cd ~/.rbenv/plugins/ruby-build
-        git pull
-        cd $current_dir
+        (cd ~/.rbenv/plugins/ruby-build && git pull)
         rbenv install --skip-existing $ruby_version
         rbenv rehash
     fi
@@ -103,7 +95,6 @@ function validate_and_install_ruby(){
 
 function set_up_bundler(){
     rbenv local $ruby_version
-    set +a
     bundle install
 }
 
