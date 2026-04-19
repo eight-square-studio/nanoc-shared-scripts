@@ -45,7 +45,7 @@ function read_deploy_config() {
 }
 
 function check_aws_auth() {
-    if [[ -n "$CI" ]]; then
+    if [[ -n "${CI:-}" ]]; then
         # In CI, credentials are injected via environment — just validate they work
         if aws sts get-caller-identity &>/dev/null; then
             echo -e "${PASS} AWS authenticated"

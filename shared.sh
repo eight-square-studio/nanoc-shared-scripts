@@ -108,7 +108,7 @@ function check_for_nanoc(){
 }
 
 function initiate(){
-    if [[ -n "$CI" ]]; then
+    if [[ -n "${CI:-}" ]]; then
         echo -e "${PASS} CI environment detected — skipping local setup"
         return 0
     fi
