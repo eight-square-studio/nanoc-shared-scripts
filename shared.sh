@@ -6,7 +6,6 @@ current_dir="$(pwd)"
 default_ruby_version="3.4.7"
 ruby_version=""
 
-set -a
 # Colours
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -96,7 +95,6 @@ function validate_and_install_ruby(){
 
 function set_up_bundler(){
     rbenv local $ruby_version
-    set +a
     bundle install
 }
 

@@ -111,21 +111,21 @@ function update_hash_in_deployed() {
 function get_changed_files() {
     local deployed_file="${current_dir}/.deployed"
     local output_dir="${current_dir}/output"
-    local temp_file=$(mktemp)
+    local temp_file current_hashes previous_hashes
+    temp_file=$(mktemp)
+    current_hashes=$(mktemp)
+    previous_hashes=$(mktemp)
+    trap 'rm -f "$temp_file" "$current_hashes" "$previous_hashes"' RETURN
     if [[ ! -f "$deployed_file" ]]; then
         echo -e "${WARN} No previous deployment found. All files will be uploaded." >&2
         find "$output_dir" -type f ! -path '*/.*' | sed "s|^$output_dir/||" | sort > "$temp_file"
         cat "$temp_file"
-        rm "$temp_file"
         return 0
     fi
-    local current_hashes=$(mktemp)
-    local previous_hashes=$(mktemp)
     generate_file_hashes > "$current_hashes"
     LC_ALL=C sort "$deployed_file" > "$previous_hashes"
     comm -23 "$current_hashes" "$previous_hashes" | awk '{print $NF}' > "$temp_file"
     cat "$temp_file"
-    rm "$current_hashes" "$previous_hashes" "$temp_file"
 }
 
 function get_deleted_files() {
