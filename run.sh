@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Setup environment and run nanoc — watch + serve by default, or compile only with --no-watch
 
 # Resolve symlinks to find the real script directory
@@ -75,7 +76,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "$RESTART_TAILSCALE" == true ]]; then
+function restart_tailscale() {
     if command -v tailscale &> /dev/null; then
         echo -e "${PASS} Restarting Tailscale..."
         tailscale down
@@ -84,6 +85,10 @@ if [[ "$RESTART_TAILSCALE" == true ]]; then
     else
         echo -e "${WARN} tailscale not found, skipping"
     fi
+}
+
+if [[ "$RESTART_TAILSCALE" == true ]]; then
+    restart_tailscale
     exit 0
 fi
 
@@ -95,14 +100,7 @@ fi
 initiate
 
 if [[ "$VSCODE" == true ]]; then
-    if command -v tailscale &> /dev/null; then
-        echo -e "${PASS} Restarting Tailscale..."
-        tailscale down
-        sleep 10
-        tailscale up
-    else
-        echo -e "${WARN} tailscale not found, skipping"
-    fi
+    restart_tailscale
     if command -v code &> /dev/null; then
         if lsof -i :"$VSCODE_PORT" -sTCP:LISTEN &>/dev/null; then
             echo -e "${FAIL} Port ${VSCODE_PORT} is in use. VS Code server cannot start."

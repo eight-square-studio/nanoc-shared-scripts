@@ -1,4 +1,5 @@
 #!/bin/bash
+set -uo pipefail
 # One-time setup verification for a nanoc project using nanoc-shared-scripts as a submodule.
 # Run from the project root after adding the submodule, or after a significant update.
 # On success: writes .validated to the project root and creates run.sh / deploy.sh symlinks.

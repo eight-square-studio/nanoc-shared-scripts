@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Setup environment, compile, and deploy to S3 + CloudFront
 # Locally: checks/installs awscli, prompts for AWS auth if needed
 # CI ($CI is set): skips local setup, uses environment credentials
