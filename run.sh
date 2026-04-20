@@ -97,8 +97,6 @@ if [[ "$CLEAN" == true ]]; then
     rm -rf output/
 fi
 
-initiate
-
 if [[ "$VSCODE" == true ]]; then
     restart_tailscale
     if command -v code &> /dev/null; then
@@ -112,6 +110,7 @@ if [[ "$VSCODE" == true ]]; then
         echo -e "${WARN} VS Code not found, skipping"
     fi
 else
+    initiate
     if [[ "$WATCH" == true ]]; then
         while lsof -i :"$PORT" -sTCP:LISTEN &>/dev/null; do
             echo -e "${WARN} Port ${PORT} is in use, trying $((PORT + 1))..."

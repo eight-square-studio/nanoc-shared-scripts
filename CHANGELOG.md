@@ -1,7 +1,13 @@
 # Changelog
 
+## 2026-04-20
+
+- Updated script to skip configuring nanoc + ruby context if it is restarting tailscale or running vscode in `run.sh` 
+
 ## 2026-04-19
 
+- Skip `ruby-build` git pull when not installed as rbenv plugin — guard with directory check so Homebrew-installed ruby-build doesn't error
+- Fix unbound variable error for `$CI` under `set -u` — use `${CI:-}` in `deploy.sh` and `shared.sh`
 - Fix `templates/deploy.yml` merge step — explicitly checkout `.deployed` from release after merging into main so latest deploy hashes always win
 - Add `set -euo pipefail` to `deploy.sh` and `run.sh`; `set -uo pipefail` to `validate.sh` (survey script intentionally continues past individual check failures)
 - Fix `validate_and_install_ruby()` — run `cd ~/.rbenv/plugins/ruby-build && git pull` in subshell to prevent working directory corruption on failure
