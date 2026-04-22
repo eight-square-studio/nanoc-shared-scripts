@@ -83,8 +83,15 @@ FREEZE_SCRIPT = <<~JS
   style.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }';
   document.head.appendChild(style);
   document.querySelectorAll('[data-animate], [data-animate-stagger] > *, [data-animate-chips] > *').forEach(el => el.classList.add('is-visible'));
+  document.querySelectorAll('[data-hero], [data-hero-image], .hero, .hero__image, .hero__bg').forEach(el => {
+    el.style.opacity = '1';
+    el.style.visibility = 'visible';
+  });
   const hero = document.querySelector('.hero__content');
-  if (hero) hero.style.setProperty('--hero-opacity', '1');
+  if (hero) {
+    hero.style.setProperty('--hero-opacity', '1');
+    hero.style.setProperty('--hero-image-opacity', '1');
+  }
 JS
 
 def screenshot_pages(pages, base_url, out_dir, browser)
@@ -96,7 +103,7 @@ def screenshot_pages(pages, base_url, out_dir, browser)
     browser.goto(url)
     browser.network.wait_for_idle
     browser.execute(FREEZE_SCRIPT)
-    sleep 0.5
+    sleep 1
     browser.screenshot(path: out, full: true)
   end
 end
