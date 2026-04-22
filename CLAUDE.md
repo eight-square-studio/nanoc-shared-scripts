@@ -14,12 +14,15 @@ Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 ## Repo structure
 
 ```
-shared.sh     # Sourced by all other scripts — setup functions, colours, vars
-deploy.sh     # S3 sync, CloudFront invalidation, release tagging
-run.sh        # Watch + serve (default), one-off compile (--no-watch), VS Code server (--vscode)
-validate.sh   # One-time setup check; writes .validated and creates symlinks
+shared.sh          # Sourced by all other scripts — setup functions, colours, vars
+deploy.sh          # S3 sync, CloudFront invalidation, release tagging
+run.sh             # Watch + serve (default), one-off compile (--no-watch), VS Code server (--vscode)
+validate.sh        # One-time setup check; writes .validated and creates symlinks
+check-layouts.sh   # Visual regression screenshot comparison (current branch vs release)
+tools/
+  screenshot-compare.rb  # Ruby script called by check-layouts.sh
 templates/
-  deploy.yml  # Full workflow — copied into consumer projects by validate.sh
+  deploy.yml       # Full workflow — copied into consumer projects by validate.sh
 CLAUDE.md
 README.md
 ```
@@ -92,6 +95,24 @@ Full production deploy pipeline. Must be run from the project root
 - `output/` — built by nanoc compile step
 - `.deployed` — created on first deploy, committed thereafter
 
+### check-layouts.sh
+Visual regression screenshot comparison between the current branch and `release`.
+Screenshots every page, diffs them with ImageMagick, and generates an HTML report.
+Flags pages where >1% of pixels changed. Opens report automatically on completion.
+
+**Prerequisites (checked and auto-installed where possible):**
+- ImageMagick (`compare`, `convert`) — auto-installed via `brew install imagemagick` if missing
+- Google Chrome at `/Applications/Google Chrome.app` — must be installed manually (Ferrum uses Chrome via CDP)
+- `ferrum` gem — auto-added to consumer `Gemfile` if missing, then installed via `bundle install`
+
+**Path resolution:** Script uses `PROJECT_DIR` env var (set to `$current_dir` by the shell script) to locate `content/pages/`, `tmp/screenshots/`, and the git worktree. The Ruby script at `tools/screenshot-compare.rb` must always be invoked via `check-layouts.sh` — calling it directly without `PROJECT_DIR` set will abort with an error.
+
+**Page discovery:** Globs `content/pages/**/*.haml` in the consumer project, reads frontmatter, skips `publish: false` pages, derives URLs using the same routing logic as nanoc `Rules`.
+
+**Output:** `{project}/tmp/screenshots/` — `release/`, `current/`, `diffs/` subdirs + `report.html`. Covered by `/tmp/` in `.gitignore`.
+
+**Exit code:** 1 if any pages are flagged, 0 if all pass.
+
 ### validate.sh
 One-time setup verification. Run after adding the submodule to a new project,
 or after a significant submodule update.
@@ -100,13 +121,13 @@ Checks:
 - `nanoc.yaml` present and contains `s3_bucket`, `cloudfront_distribution_id`, `aws_region`
 - `.ruby-version` present
 - `.github/workflows/deploy.yml` always synced from `templates/deploy.yml` (copied/updated on every run); checks it contains the string `nanoc-shared-scripts` (satisfied by the `bash ./nanoc-shared-scripts/deploy.sh` run step)
-- `deploy.sh`, `run.sh`, `shared.sh`, `validate.sh` are executable
+- `deploy.sh`, `run.sh`, `shared.sh`, `validate.sh`, `check-layouts.sh` are executable
 - AWS credentials reachable via `sts get-caller-identity`
 
 On success writes `.validated` to the project root with a timestamp and the
-shared scripts git SHA, creates symlinks `run.sh` and `deploy.sh` at the project
-root, and adds `.validated`, `run.sh`, and `deploy.sh` to `.gitignore`. All three
-are local machine state only — recreated by validate on each machine.
+shared scripts git SHA, creates symlinks `run.sh`, `deploy.sh`, and `check-layouts.sh`
+at the project root, and adds all four (plus `.validated`) to `.gitignore`. All are
+local machine state only — recreated by validate on each machine.
 
 ```bash
 bash ./nanoc-shared-scripts/validate.sh
@@ -144,8 +165,8 @@ Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`
 - CI skips all setup checks when `$CI` env var is set
 - `current_dir` is set to `$PWD` in `shared.sh` — scripts must always be run from the project root
 - Hash commands handle both platforms via `sha256_file()`: `sha256sum` (Linux) and `shasum -a 256` (macOS)
-- `deploy.sh` and `run.sh` resolve symlinks before sourcing `shared.sh` (they're accessed via symlinks from the project root); `validate.sh` uses the simpler `source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"` since it's always run directly
-  — `shared.sh` must always live in the same directory as the scripts that source it
+- `deploy.sh`, `run.sh`, and `check-layouts.sh` resolve symlinks before sourcing `shared.sh` (they're accessed via symlinks from the project root); `validate.sh` uses the simpler `source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"` since it's always run directly — `shared.sh` must always live in the same directory as the scripts that source it
+- `check-layouts.sh` passes `PROJECT_DIR="$current_dir"` to `tools/screenshot-compare.rb` via env var — the Ruby script uses this to locate consumer project files rather than resolving paths relative to `__dir__`
 - Colour/formatting constants (`PASS`, `FAIL`, etc.) are defined in `shared.sh`
 
 ---

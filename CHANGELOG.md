@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-22
+
+- Add `check-layouts.sh` — visual regression screenshot comparison between current branch and `release`; screenshots all published pages via Ferrum (Chrome CDP), diffs with ImageMagick, generates HTML report, exits 1 if any page >1% changed
+- Add `tools/screenshot-compare.rb` — Ruby script called by `check-layouts.sh`; discovers pages from `content/pages/**/*.haml`, respects `publish: false`, derives URLs from nanoc routing rules; uses `PROJECT_DIR` env var for all consumer project paths
+- Update `validate.sh` — add `check-layouts.sh` to executable check, gitignore entries, and symlink creation
+
 ## 2026-04-20
 
 - Updated script to skip configuring nanoc + ruby context if it is restarting tailscale or running vscode in `run.sh` 

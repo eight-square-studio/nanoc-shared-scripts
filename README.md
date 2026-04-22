@@ -96,6 +96,24 @@ containing `nanoc.yaml`).
 8. Commits `.deployed` as `*** Release YYYY-MM-DD ***`
 9. Creates and pushes a sequential release tag (`YYYY-MM-DD-NN`)
 
+### check-layouts.sh — visual regression comparison
+
+Compares full-page screenshots of every published page between your current branch
+and `release`. Highlights pixel-level differences and flags pages where >1% of pixels changed.
+
+```bash
+./check-layouts.sh
+```
+
+**Prerequisites:**
+- Google Chrome must be installed at `/Applications/Google Chrome.app`
+- ImageMagick is auto-installed via Homebrew if missing
+- `ferrum` gem is auto-added to your `Gemfile` and installed if missing
+
+Pages are discovered automatically from `content/pages/**/*.haml` — no hardcoded list.
+Output (screenshots + HTML report) goes to `tmp/screenshots/` in your project root.
+Report opens automatically in your browser on completion. Exits with code 1 if any pages are flagged.
+
 ### validate.sh — setup check
 
 One-time verification after adding the submodule or updating it significantly.
@@ -104,8 +122,9 @@ One-time verification after adding the submodule or updating it significantly.
 bash ./nanoc-shared-scripts/validate.sh
 ```
 
-Writes `.validated` to the project root on success. Creates `run.sh` and `deploy.sh`
-symlinks and adds all three to `.gitignore` — local machine state only, not committed.
+Writes `.validated` to the project root on success. Creates `run.sh`, `deploy.sh`, and
+`check-layouts.sh` symlinks and adds all four (plus `.validated`) to `.gitignore` —
+local machine state only, not committed.
 
 ---
 

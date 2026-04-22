@@ -67,7 +67,7 @@ else
 fi
 
 # --- Check: shared scripts are executable ---
-for script in deploy.sh run.sh shared.sh validate.sh; do
+for script in deploy.sh run.sh shared.sh validate.sh check-layouts.sh; do
     script_path="$SCRIPT_DIR/${script}"
     if [[ -x "$script_path" ]]; then
         check_pass "${script} is executable"
@@ -95,7 +95,7 @@ fi
 
 # --- Ensure local-only files are gitignored ---
 gitignore_file="$current_dir/.gitignore"
-for entry in .validated run.sh deploy.sh; do
+for entry in .validated run.sh deploy.sh check-layouts.sh; do
     if grep -q "^${entry}$" "$gitignore_file" 2>/dev/null; then
         echo -e "${PASS} .gitignore already ignores ${entry}"
     else
@@ -117,7 +117,7 @@ validated_file="$current_dir/.validated"
 echo -e "${PASS} Written: .validated"
 
 # --- Create symlinks at project root ---
-for script in run.sh deploy.sh; do
+for script in run.sh deploy.sh check-layouts.sh; do
     target="nanoc-shared-scripts/${script}"
     link="$current_dir/${script}"
     if [[ -L "$link" ]]; then
@@ -139,8 +139,9 @@ done
 
 echo ""
 echo -e "${PASS} Validation complete. You can now run:"
-echo -e "  ${WHITE}./run.sh${NC}     — watch + serve at localhost:3000"
-echo -e "  ${WHITE}./deploy.sh${NC}  — full production deploy"
+echo -e "  ${WHITE}./run.sh${NC}            — watch + serve at localhost:3000"
+echo -e "  ${WHITE}./deploy.sh${NC}         — full production deploy"
+echo -e "  ${WHITE}./check-layouts.sh${NC}  — visual regression screenshot comparison"
 echo ""
 echo "If .gitignore was updated, commit it:"
 echo "  git add .gitignore && git commit -m \"Gitignore local script symlinks and .validated\""
