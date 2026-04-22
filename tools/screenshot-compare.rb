@@ -3,7 +3,6 @@
 
 require 'ferrum'
 require 'fileutils'
-require 'yaml'
 require 'open3'
 require 'socket'
 require 'base64'
@@ -52,26 +51,23 @@ end
 # ── Page discovery ────────────────────────────────────────────────────────────
 
 def discover_pages(project_dir)
-  pages_dir = File.join(project_dir, 'content', 'pages')
-  Dir.glob(File.join(pages_dir, '**', '*.haml')).sort.filter_map do |path|
-    frontmatter = {}
-    content = File.read(path)
-    frontmatter = YAML.safe_load($1) || {} if content =~ /\A---\s*\n(.*?)\n---/m
-    next if frontmatter['publish'] == false
-
-    relative = path.sub("#{pages_dir}/", '')
-    url = haml_to_url(relative)
+  output_prefix = File.join(project_dir, 'output') + '/'
+  stdout, = Open3.capture2('bundle exec nanoc show-data', chdir: project_dir)
+  stdout.lines.filter_map do |line|
+    next unless line.include?('.html')
+    path = line[%r{(#{Regexp.escape(output_prefix)}\S*\.html)}, 1]
+    next unless path
+    relative = path.sub(output_prefix, '')
+    url = output_path_to_url(relative)
     { url: url, filename: url_to_filename(url) }
-  end
+  end.uniq { |p| p[:url] }.sort_by { |p| p[:url] }
 end
 
-def haml_to_url(relative)
-  base = relative.sub(/\.haml$/, '')
-  case base
-  when 'index' then '/'
-  when 'error' then '/error.html'
-  when 'login' then '/login.html'
-  else              "/#{base}/"
+def output_path_to_url(relative)
+  case relative
+  when 'index.html'            then '/'
+  when %r{\A(.+)/index\.html\z} then "/#{$1}/"
+  else                              "/#{relative}"
   end
 end
 
