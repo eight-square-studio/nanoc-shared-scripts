@@ -69,8 +69,8 @@ def haml_to_url(relative)
   base = relative.sub(/\.haml$/, '')
   case base
   when 'index' then '/'
-  when 'error' then '/error/'
-  when 'login' then '/login/'
+  when 'error' then '/error.html'
+  when 'login' then '/login.html'
   else              "/#{base}/"
   end
 end
