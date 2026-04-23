@@ -109,6 +109,25 @@ Flags pages where >1% of pixels changed. Opens report automatically on completio
 
 **Page discovery:** Globs `content/pages/**/*.haml` in the consumer project, reads frontmatter, skips `publish: false` pages, derives URLs using the same routing logic as nanoc `Rules`.
 
+**Screenshot pipeline (per page):**
+1. Reset browser viewport to `1440×900`
+2. Load page; wait for network idle
+3. Execute `screenshot-overrides.js` (freeze script):
+   - `window.scrollTo(0, 0)`
+   - Pin all `100vh` selectors to `window.innerHeight` — prevents inflation when viewport resizes
+   - Disable all animations, transitions, scroll behaviour
+   - Add `is-visible` to all `[data-animate]`, `[data-animate-stagger]`, `[data-animate-chips]` parents
+   - Force hero content visible (`opacity: 1 !important`)
+   - Load named web fonts; decode all images; set `window.__renderReady` after `requestAnimationFrame`
+4. Wait for network idle; poll for `window.__renderReady`
+5. Measure `document.documentElement.scrollHeight`
+6. Resize viewport to that height — forces Chrome to paint all below-fold content
+7. Sleep 0.5s; take `full: false` screenshot (viewport now equals full page height)
+
+**Why resize instead of `full: true`:** Chrome's `captureBeyondViewport` (used by `full: true`) inflates `100vh` to the document height, breaking min-height layouts. Resizing the viewport to the document height before a regular screenshot avoids this entirely.
+
+**`screenshot-overrides.js`:** Injected before each screenshot. Consumer projects get their own copy (created by `validate.sh` from `templates/screenshot-overrides.js`) and can customise it. The default pins `.hero`, `.section`, `.error-page`, `.login-page` — add any other `100vh` selectors specific to the project.
+
 **Output:** `{project}/tmp/screenshots/` — `release/`, `current/`, `diffs/` subdirs + `report.html`. Covered by `/tmp/` in `.gitignore`.
 
 **Exit code:** 1 if any pages are flagged, 0 if all pass.

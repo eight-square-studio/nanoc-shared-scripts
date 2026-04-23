@@ -114,6 +114,16 @@ Pages are discovered automatically from `content/pages/**/*.haml` — no hardcod
 Output (screenshots + HTML report) goes to `tmp/screenshots/` in your project root.
 Report opens automatically in your browser on completion. Exits with code 1 if any pages are flagged.
 
+**Customising the freeze script:**
+
+Before each screenshot, the tool injects `screenshot-overrides.js` from your project root.
+`validate.sh` creates this file from the template if it doesn't exist. You can edit it to:
+- Add extra `100vh` selectors to the pin list (default covers `.hero`, `.section`, `.error-page`, `.login-page`)
+- Load additional web font families by name for accurate font rendering
+- Add any other page-specific freeze logic
+
+The default freeze script handles animations, transitions, scroll-based fading, `is-visible` reveal classes, and web font + image loading.
+
 ### validate.sh — setup check
 
 One-time verification after adding the submodule or updating it significantly.

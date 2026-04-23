@@ -4,6 +4,15 @@
 
 - Update `validate.sh` — copy `templates/Gemfile` into project root if no `Gemfile` exists (existing Gemfiles left untouched)
 - Extract screenshot freeze/override JS from `screenshot-compare.rb` into `templates/screenshot-overrides.js`; `validate.sh` copies it to project root if missing; each project can customise their own; injection skipped if file absent
+- Fix headless Chrome screenshot rendering in `tools/screenshot-compare.rb` and `templates/screenshot-overrides.js`:
+  - Fix `100vh` inflation: `full: true` / `captureBeyondViewport` inflates all `100vh` elements to document height — replaced with reset viewport → freeze → measure `scrollHeight` → resize viewport to `scrollHeight` → `full: false` screenshot; forces Chrome to paint all content without viewport side-effects
+  - Pin all `100vh` selectors (`.hero`, `.section`, `.error-page`, `.login-page`) to actual `window.innerHeight` before resize so they don't re-inflate
+  - Fix below-fold content not painting — viewport resize to full document height causes Chrome to treat all content as in-viewport and paint it
+  - Fix `[data-animate-stagger]` / `[data-animate-chips]` visibility — `is-visible` now added to parent containers (CSS selector is `[data-animate-stagger].is-visible > *`), not children
+  - Fix hero content fading during screenshot — add `.hero__content { opacity: 1 !important }` to freeze CSS so JS scroll handler can't override it
+  - Fix web font rendering — load actual font families by name in freeze script; wait for `requestAnimationFrame` after fonts and images are ready before flagging `__renderReady`
+  - Add `img.decode()` for all images to ensure images are painted before screenshot
+  - Reset browser viewport to `1440×900` at the start of each page to ensure consistent `window.innerHeight` across pages
 
 ## 2026-04-22
 
