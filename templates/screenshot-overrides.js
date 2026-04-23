@@ -7,7 +7,7 @@ __vhFix.textContent = `.hero, .section, .error-page, .login-page { min-height: $
 document.head.appendChild(__vhFix);
 
 const style = document.createElement('style');
-style.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }';
+style.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } .hero__content { opacity: 1 !important; }';
 document.head.appendChild(style);
 document.querySelectorAll('[data-animate], [data-animate-stagger], [data-animate-chips]').forEach(el => el.classList.add('is-visible'));
 document.querySelectorAll('[data-hero], [data-hero-image], .hero, .hero__image, .hero__bg').forEach(el => {
