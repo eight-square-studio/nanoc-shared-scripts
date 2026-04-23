@@ -57,6 +57,14 @@ else
     check_pass "Gemfile copied from template"
 fi
 
+# --- Check: screenshot-overrides.js exists; copy from template if missing ---
+if [[ -f "$current_dir/screenshot-overrides.js" ]]; then
+    check_pass "screenshot-overrides.js found"
+else
+    cp "$SCRIPT_DIR/templates/screenshot-overrides.js" "$current_dir/screenshot-overrides.js"
+    check_pass "screenshot-overrides.js copied from template"
+fi
+
 # --- Check: .github/workflows/deploy.yml exists; copy/update from template ---
 workflow_file="$current_dir/.github/workflows/deploy.yml"
 mkdir -p "$current_dir/.github/workflows"

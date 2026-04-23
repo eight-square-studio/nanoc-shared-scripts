@@ -78,21 +78,8 @@ end
 
 # ── Screenshot ────────────────────────────────────────────────────────────────
 
-FREEZE_SCRIPT = <<~JS
-  const style = document.createElement('style');
-  style.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }';
-  document.head.appendChild(style);
-  document.querySelectorAll('[data-animate], [data-animate-stagger] > *, [data-animate-chips] > *').forEach(el => el.classList.add('is-visible'));
-  document.querySelectorAll('[data-hero], [data-hero-image], .hero, .hero__image, .hero__bg').forEach(el => {
-    el.style.opacity = '1';
-    el.style.visibility = 'visible';
-  });
-  const hero = document.querySelector('.hero__content');
-  if (hero) {
-    hero.style.setProperty('--hero-opacity', '1');
-    hero.style.setProperty('--hero-image-opacity', '1');
-  }
-JS
+OVERRIDES_PATH = File.join(PROJECT_DIR, 'screenshot-overrides.js')
+FREEZE_SCRIPT  = File.exist?(OVERRIDES_PATH) ? File.read(OVERRIDES_PATH) : nil
 
 def screenshot_pages(pages, base_url, out_dir, browser)
   FileUtils.mkdir_p(out_dir)
@@ -102,7 +89,7 @@ def screenshot_pages(pages, base_url, out_dir, browser)
     log "  #{url} → #{page[:filename]}"
     browser.goto(url)
     browser.network.wait_for_idle
-    browser.execute(FREEZE_SCRIPT)
+    browser.execute(FREEZE_SCRIPT) if FREEZE_SCRIPT
     sleep 1
     browser.screenshot(path: out, full: true)
   end

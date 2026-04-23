@@ -3,6 +3,7 @@
 ## 2026-04-23
 
 - Update `validate.sh` — copy `templates/Gemfile` into project root if no `Gemfile` exists (existing Gemfiles left untouched)
+- Extract screenshot freeze/override JS from `screenshot-compare.rb` into `templates/screenshot-overrides.js`; `validate.sh` copies it to project root if missing; each project can customise their own; injection skipped if file absent
 
 ## 2026-04-22
 

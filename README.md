@@ -123,7 +123,9 @@ bash ./nanoc-shared-scripts/validate.sh
 ```
 
 Copies `templates/Gemfile` into the project root if no `Gemfile` exists (existing
-Gemfiles are left untouched). Writes `.validated` to the project root on success.
+Gemfiles are left untouched). Copies `templates/screenshot-overrides.js` if missing —
+this JS is injected into pages before screenshotting to freeze animations; customise
+per-project as needed. Writes `.validated` to the project root on success.
 Creates `run.sh`, `deploy.sh`, and `check-layouts.sh` symlinks and adds all four
 (plus `.validated`) to `.gitignore` — local machine state only, not committed.
 
