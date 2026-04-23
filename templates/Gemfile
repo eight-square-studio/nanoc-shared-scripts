@@ -1,0 +1,19 @@
+# frozen_string_literal: true
+
+source 'https://rubygems.org'
+
+gem 'nanoc', '~> 4.14'
+gem 'adsf'
+gem 'kramdown'
+gem 'nanoc-live'
+gem "webrick", "~> 1.9"
+
+gem "haml", "~> 5.2"
+
+group :nanoc do
+  gem "nanoc-dart-sass", "~> 2.0"
+end
+
+group :tools do
+  gem 'ferrum', '~> 0.17'
+end
