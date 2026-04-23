@@ -88,9 +88,13 @@ def screenshot_pages(pages, base_url, out_dir, browser)
     out = File.join(out_dir, page[:filename])
     log "  #{url} → #{page[:filename]}"
     browser.goto(url)
-    browser.network.wait_for_idle
+    browser.network.wait_for_idle(duration: 0.3, timeout: 30)
     browser.execute(FREEZE_SCRIPT) if FREEZE_SCRIPT
-    sleep 1
+    browser.network.wait_for_idle(duration: 0.3, timeout: 10)
+    50.times { break if browser.evaluate("window.__renderReady === true"); sleep 0.1 }
+    full_height = browser.evaluate('document.documentElement.scrollHeight')
+    browser.resize(width: 1440, height: full_height)
+    sleep 0.5
     browser.screenshot(path: out, full: true)
   end
 end
