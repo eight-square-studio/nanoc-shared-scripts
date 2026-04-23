@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-04-23
+
+- Update `validate.sh` — copy `templates/Gemfile` into project root if no `Gemfile` exists (existing Gemfiles left untouched)
+
 ## 2026-04-22
 
 - Add `check-layouts.sh` — visual regression screenshot comparison between current branch and `release`; screenshots all published pages via Ferrum (Chrome CDP), diffs with ImageMagick, generates HTML report, exits 1 if any page >1% changed

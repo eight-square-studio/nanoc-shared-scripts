@@ -122,9 +122,10 @@ One-time verification after adding the submodule or updating it significantly.
 bash ./nanoc-shared-scripts/validate.sh
 ```
 
-Writes `.validated` to the project root on success. Creates `run.sh`, `deploy.sh`, and
-`check-layouts.sh` symlinks and adds all four (plus `.validated`) to `.gitignore` —
-local machine state only, not committed.
+Copies `templates/Gemfile` into the project root if no `Gemfile` exists (existing
+Gemfiles are left untouched). Writes `.validated` to the project root on success.
+Creates `run.sh`, `deploy.sh`, and `check-layouts.sh` symlinks and adds all four
+(plus `.validated`) to `.gitignore` — local machine state only, not committed.
 
 ---
 

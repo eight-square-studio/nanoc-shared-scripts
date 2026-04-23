@@ -49,6 +49,14 @@ else
     check_fail ".ruby-version not found"
 fi
 
+# --- Check: Gemfile exists; copy from template if missing ---
+if [[ -f "$current_dir/Gemfile" ]]; then
+    check_pass "Gemfile found"
+else
+    cp "$SCRIPT_DIR/templates/Gemfile" "$current_dir/Gemfile"
+    check_pass "Gemfile copied from template"
+fi
+
 # --- Check: .github/workflows/deploy.yml exists; copy/update from template ---
 workflow_file="$current_dir/.github/workflows/deploy.yml"
 mkdir -p "$current_dir/.github/workflows"

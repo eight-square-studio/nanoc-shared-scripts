@@ -120,6 +120,7 @@ or after a significant submodule update.
 Checks:
 - `nanoc.yaml` present and contains `s3_bucket`, `cloudfront_distribution_id`, `aws_region`
 - `.ruby-version` present
+- `Gemfile` present — copies from `templates/Gemfile` if missing (existing Gemfiles are left untouched)
 - `.github/workflows/deploy.yml` always synced from `templates/deploy.yml` (copied/updated on every run); checks it contains the string `nanoc-shared-scripts` (satisfied by the `bash ./nanoc-shared-scripts/deploy.sh` run step)
 - `deploy.sh`, `run.sh`, `shared.sh`, `validate.sh`, `check-layouts.sh` are executable
 - AWS credentials reachable via `sts get-caller-identity`
