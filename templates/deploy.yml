@@ -51,7 +51,5 @@ jobs:
         run: |
           git checkout main
           git pull origin main
-          git merge release --no-edit
-          git checkout release -- .deployed
-          git diff --cached --quiet || git commit -m "Sync .deployed from release"
+          git merge -X theirs release --no-edit
           git push origin main
