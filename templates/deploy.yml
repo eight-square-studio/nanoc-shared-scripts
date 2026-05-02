@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - release
+    paths-ignore:
+      - '.deployed'
   workflow_call:
     secrets:
       AWS_ACCESS_KEY_ID:
