@@ -79,6 +79,7 @@ function check_for_rbenv(){
         fi
     else
         echo -e "${PASS} rbenv is installed"
+        export PATH="$(rbenv root)/shims:$PATH"
     fi
 }
 
