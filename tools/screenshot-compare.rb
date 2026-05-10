@@ -188,6 +188,9 @@ FileUtils.mkdir_p(["#{TMP_BASE}/release", "#{TMP_BASE}/current", "#{TMP_BASE}/di
 log 'Setting up release worktree'
 system("git worktree remove #{WORKTREE} --force 2>/dev/null")
 run! "git worktree add #{WORKTREE} release"
+ruby_version = File.read(File.join(WORKTREE, '.ruby-version')).strip
+run! "rbenv local #{ruby_version}", dir: WORKTREE
+run! 'bundle install', dir: WORKTREE
 run! 'bundle exec nanoc compile', dir: WORKTREE
 
 release_pages = discover_pages(WORKTREE)
