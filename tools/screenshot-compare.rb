@@ -7,9 +7,10 @@ require 'open3'
 require 'socket'
 require 'base64'
 
-PROJECT_DIR = ENV.fetch('PROJECT_DIR') { abort 'PROJECT_DIR env var not set — run via check-layouts.sh' }
-TMP_BASE    = File.join(PROJECT_DIR, 'tmp', 'screenshots')
-WORKTREE    = File.join(PROJECT_DIR, 'tmp', 'worktree-release')
+PROJECT_DIR     = ENV.fetch('PROJECT_DIR') { abort 'PROJECT_DIR env var not set — run via check-layouts.sh' }
+TMP_BASE        = File.join(PROJECT_DIR, 'tmp', 'screenshots')
+WORKTREE        = File.join(PROJECT_DIR, 'tmp', 'worktree-release')
+SCREENSHOT_ONLY = ENV['SCREENSHOT_ONLY'] == '1'
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -179,9 +180,75 @@ def generate_report(results, out_path)
   log "Report written: #{out_path}"
 end
 
+# ── Screenshot-only report ────────────────────────────────────────────────────
+
+def generate_screenshot_report(pages, screenshots_dir, out_path)
+  rows = pages.map do |page|
+    path = File.join(screenshots_dir, page[:filename])
+    src  = embed_image(path)
+    <<~HTML
+      <section class="page-section">
+        <h2>#{page[:url]}</h2>
+        <img src="#{src}">
+      </section>
+    HTML
+  end.join("\n")
+
+  html = <<~HTML
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Screenshots — #{Time.now.strftime('%Y-%m-%d %H:%M')}</title>
+      <style>
+        body { font-family: system-ui, sans-serif; margin: 2rem; background: #111; color: #eee; }
+        h1 { margin-bottom: 2rem; }
+        .page-section { margin-bottom: 4rem; }
+        .page-section h2 { margin-bottom: 0.5rem; font-size: 1rem; color: #aaa; }
+        .page-section img { width: 100%; border: 1px solid #333; }
+      </style>
+    </head>
+    <body>
+      <h1>Screenshots — #{Time.now.strftime('%Y-%m-%d %H:%M')}</h1>
+      #{rows}
+    </body>
+    </html>
+  HTML
+
+  File.write(out_path, html)
+  log "Report written: #{out_path}"
+end
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 FileUtils.rm_rf(TMP_BASE)
+
+if SCREENSHOT_ONLY
+  FileUtils.mkdir_p("#{TMP_BASE}/current")
+
+  log 'Screenshot-only mode — skipping release comparison'
+  log 'Compiling current branch'
+  run! 'bundle exec nanoc compile'
+
+  current_pages = discover_pages(PROJECT_DIR)
+  log "Found #{current_pages.size} pages"
+
+  current_pid = start_server(3000, dir: PROJECT_DIR)
+  browser = Ferrum::Browser.new(headless: true, window_size: [1440, 900])
+  begin
+    screenshot_pages(current_pages, 'http://localhost:3000', "#{TMP_BASE}/current", browser)
+  ensure
+    browser.quit
+    kill_server(current_pid)
+  end
+
+  report_path = "#{TMP_BASE}/report.html"
+  generate_screenshot_report(current_pages, "#{TMP_BASE}/current", report_path)
+  `open "#{report_path}"`
+  log "Done — #{current_pages.size} pages screenshotted"
+  exit 0
+end
+
 FileUtils.mkdir_p(["#{TMP_BASE}/release", "#{TMP_BASE}/current", "#{TMP_BASE}/diffs"])
 
 # -- Release worktree

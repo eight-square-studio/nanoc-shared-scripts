@@ -2,6 +2,8 @@
 set -euo pipefail
 # Visual regression screenshot comparison — catches layout changes between current branch and release.
 # Run from the project root: bash check-layouts.sh (or via symlink: ./check-layouts.sh)
+# Flags:
+#   --screenshot-only, -s   Screenshot current branch only; skip release comparison
 
 # Resolve symlink to find the real script directory, then source shared.sh
 _s="${BASH_SOURCE[0]}"
@@ -9,8 +11,17 @@ while [[ -L "$_s" ]]; do _d="$(cd "$(dirname "$_s")" && pwd)"; _s="$(readlink "$
 SHARED_SCRIPTS_DIR="$(cd "$(dirname "$_s")" && pwd)"
 source "$SHARED_SCRIPTS_DIR/shared.sh"
 
+# ── Parse flags ───────────────────────────────────────────────────────────────
+SCREENSHOT_ONLY=0
+for arg in "$@"; do
+    case "$arg" in
+        --screenshot-only|-s) SCREENSHOT_ONLY=1 ;;
+        *) echo "Unknown flag: $arg"; exit 1 ;;
+    esac
+done
+
 # ── Prereqs: ImageMagick ──────────────────────────────────────────────────────
-if ! command -v compare &>/dev/null || ! command -v convert &>/dev/null; then
+if [[ "$SCREENSHOT_ONLY" -eq 0 ]] && { ! command -v compare &>/dev/null || ! command -v convert &>/dev/null; }; then
     echo -e "${WARN} ImageMagick not found — installing via Homebrew..."
     brew install imagemagick
     if ! command -v compare &>/dev/null; then
@@ -18,7 +29,7 @@ if ! command -v compare &>/dev/null || ! command -v convert &>/dev/null; then
         exit 1
     fi
 fi
-echo -e "${PASS} ImageMagick available"
+if [[ "$SCREENSHOT_ONLY" -eq 0 ]]; then echo -e "${PASS} ImageMagick available"; fi
 
 # ── Prereqs: Google Chrome ────────────────────────────────────────────────────
 if [[ ! -d "/Applications/Google Chrome.app" ]]; then
@@ -42,4 +53,4 @@ fi
 initiate
 
 # ── Execute ───────────────────────────────────────────────────────────────────
-PROJECT_DIR="$current_dir" exec bundle exec ruby "$SHARED_SCRIPTS_DIR/tools/screenshot-compare.rb"
+PROJECT_DIR="$current_dir" SCREENSHOT_ONLY="$SCREENSHOT_ONLY" exec bundle exec ruby "$SHARED_SCRIPTS_DIR/tools/screenshot-compare.rb"

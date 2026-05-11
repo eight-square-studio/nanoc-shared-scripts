@@ -102,7 +102,9 @@ Compares full-page screenshots of every published page between your current bran
 and `release`. Highlights pixel-level differences and flags pages where >1% of pixels changed.
 
 ```bash
-./check-layouts.sh
+./check-layouts.sh                 # full compare: current vs release
+./check-layouts.sh --screenshot-only   # screenshot current branch only, no compare
+./check-layouts.sh -s              # same, short form
 ```
 
 **Prerequisites:**
