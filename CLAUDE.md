@@ -109,6 +109,12 @@ Flags pages where >1% of pixels changed. Opens report automatically on completio
 
 **Page discovery:** Globs `content/pages/**/*.haml` in the consumer project, reads frontmatter, skips `publish: false` pages, derives URLs using the same routing logic as nanoc `Rules`.
 
+**Flags:**
+
+| Flag | Short | Behaviour |
+|------|-------|-----------|
+| `--screenshot-only` | `-s` | Screenshot current branch only — skip release worktree, compile, ImageMagick prereq, and compare. Generates a simple HTML gallery and exits 0. |
+
 **Screenshot pipeline (per page):**
 1. Reset browser viewport to `1440×900`
 2. Load page; wait for network idle

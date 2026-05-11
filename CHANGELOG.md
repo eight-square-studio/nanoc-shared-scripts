@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-11
+
+- Add `--screenshot-only` / `-s` flag to `check-layouts.sh` — screenshots current branch only, skips release worktree setup, ImageMagick prereq, and comparison; generates a simple HTML gallery report and exits 0
+
 ## 2026-04-23
 
 - Update `validate.sh` — copy `templates/Gemfile` into project root if no `Gemfile` exists (existing Gemfiles left untouched)
