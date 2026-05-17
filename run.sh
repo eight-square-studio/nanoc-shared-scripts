@@ -105,7 +105,7 @@ if [[ "$VSCODE" == true ]]; then
             exit 1
         fi
         echo -e "${PASS} Starting VS Code web server on port ${VSCODE_PORT}..."
-        code serve-web --host 0.0.0.0 --port "$VSCODE_PORT" --disable-workspace-trust --without-connection-token --accept-server-license-terms
+        code serve-web --host 0.0.0.0 --port "$VSCODE_PORT" --without-connection-token --accept-server-license-terms
     else
         echo -e "${WARN} VS Code not found, skipping"
     fi
