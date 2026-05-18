@@ -53,13 +53,14 @@ All scripts must be run from the project root; `deploy.sh` and `run.sh` enforce 
 Sets up the environment then compiles the site.
 
 ```
-Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-o|--host HOST] [-p|--port PORT] [--vscode] [--restart-tailscale] [-h|--help]
+Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-o|--host HOST] [-p|--port PORT] [--vscode] [--vport PORT] [--restart-tailscale] [-h|--help]
 
   -c, --clean            Remove output/ before running
   -n, --no-watch         Compile once only (no watch, no serve)
   -o, --host HOST        Bind the server to HOST (default: 127.0.0.1; use 0.0.0.0 for all interfaces)
   -p, --port PORT        Listen on PORT (default: 3000)
-  --vscode               Restart Tailscale then launch VS Code web server on VSCODE_PORT=8000 (no nanoc)
+  --vscode               Restart Tailscale, ensure TLS certs in ~/.config/certs/, then launch code-server on VSCODE_PORT=8080 (no nanoc)
+  --vport PORT           code-server port (default: 8080)
   --restart-tailscale    Restart Tailscale and exit (no nanoc, no VS Code)
   -h, --help             Show this help message
 ```
@@ -69,7 +70,9 @@ Default (no flags): runs `nanoc compile -W` in the background and `nanoc view -L
 
 With `--no-watch`: runs `nanoc compile` once and exits.
 
-With `--vscode`: restarts Tailscale, then runs `code serve-web` on port `VSCODE_PORT` (default `8000`) in the foreground — blocks until VS Code exits. No nanoc. Errors and exits if port `VSCODE_PORT` is already in use. Mutually exclusive with nanoc (`--vscode` and nanoc share an if/else branch).
+With `--vscode`: restarts Tailscale, checks `~/.config/certs/` for a `.crt`/`.key` pair — if missing, runs `sudo tailscale cert <hostname>` in a temp dir, copies the files to `~/.config/certs/` (creating it if needed), and chowns them to the current user. Then runs `code-server` on port `VSCODE_PORT` (default `8080`) from `~`, with TLS certs passed via `--cert`/`--cert-key`. Auto-installs `code-server` via the official install script (`curl -fsSL https://code-server.dev/install.sh | sh`) if not found. Errors and exits if port `VSCODE_PORT` is already in use. On exit, traps and returns to the original working directory. Mutually exclusive with nanoc (`--vscode` and nanoc share an if/else branch).
+
+Use `--vport` to override the default port: `./run.sh --vscode --vport 9000`.
 
 With `--restart-tailscale`: restarts Tailscale (`tailscale down` → `tailscale up`) and exits — no nanoc, no VS Code.
 
