@@ -20,14 +20,12 @@ if (hero) {
   hero.style.setProperty('--hero-image-opacity', '1');
 }
 
-const fontPromises = [
-  document.fonts.load('300 1em Outfit'),
-  document.fonts.load('400 1em Outfit'),
-  document.fonts.load('500 1em Outfit'),
-  document.fonts.load('700 1em Outfit'),
-  document.fonts.load('400 1em "Playfair Display"'),
-  document.fonts.load('500 1em "Playfair Display"'),
-];
+// Load every @font-face registered by the active theme's stylesheet
+// (whatever families/weights it imports), rather than hardcoding a
+// specific theme's font list.
+const fontPromises = Array.from(document.fonts).map(font =>
+  font.load().catch(() => {})
+);
 const imagePromises = Array.from(document.images).map(img =>
   img.decode ? img.decode().catch(() => {}) : Promise.resolve()
 );
