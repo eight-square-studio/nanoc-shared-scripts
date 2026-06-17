@@ -11,12 +11,31 @@ while [[ -L "$_s" ]]; do _d="$(cd "$(dirname "$_s")" && pwd)"; _s="$(readlink "$
 SHARED_SCRIPTS_DIR="$(cd "$(dirname "$_s")" && pwd)"
 source "$SHARED_SCRIPTS_DIR/shared.sh"
 
+function print_help() {
+    echo -e "Usage: ./check-layouts.sh [-h|--help]
+
+Runs screenshots for both the current branch and the release branch, highlighting
+differences between the branches to enable quick comparison to target reviews.
+
+Options:
+  -h, --help            Show this help message
+  -s, --screenshot-only Only take screenshots of the current content and do no comparison"
+}
+
 # ── Parse flags ───────────────────────────────────────────────────────────────
 SCREENSHOT_ONLY=0
 for arg in "$@"; do
     case "$arg" in
         --screenshot-only|-s) SCREENSHOT_ONLY=1 ;;
-        *) echo "Unknown flag: $arg"; exit 1 ;;
+        -h|--help)
+            print_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown flag: $arg"
+            print_help
+            exit 1
+            ;;
     esac
 done
 
