@@ -26,8 +26,6 @@ Options:
   -o, --host HOST        Bind the server to HOST (default: 127.0.0.1)
                          Use 0.0.0.0 to listen on all interfaces
   -p, --port PORT        Listen on PORT (default: 3000)
-  --vscode               Restart Tailscale, ensure TLS certs in ~/.config/certs/, then launch code-server on port ${VSCODE_PORT} (no nanoc)
-  --vport PORT           code-server port (default: ${VSCODE_PORT})
   --restart-tailscale    Restart Tailscale and exit (no nanoc, no VS Code)
   -h, --help             Show this help message"
 }
@@ -36,8 +34,6 @@ CLEAN=false
 WATCH=true
 HOST="127.0.0.1"
 PORT="3000"
-VSCODE_PORT=8080
-VSCODE=false
 RESTART_TAILSCALE=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -55,14 +51,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         -p|--port)
             PORT="$2"
-            shift 2
-            ;;
-        --vscode)
-            VSCODE=true
-            shift
-            ;;
-        --vport)
-            VSCODE_PORT="$2"
             shift 2
             ;;
         --restart-tailscale)
@@ -102,46 +90,6 @@ if [[ "$CLEAN" == true ]]; then
     rm -rf output/
 fi
 
-if [[ "$VSCODE" == true ]]; then
-    restart_tailscale
-
-    if ! command -v code-server &> /dev/null; then
-        echo -e "${WARN} code-server not found, installing..."
-        curl -fsSL https://code-server.dev/install.sh | sh
-    fi
-
-    CERTS_DIR="$HOME/.config/certs"
-    CERT_FILE=$(find "$CERTS_DIR" -name "*.crt" 2>/dev/null | head -1)
-    KEY_FILE=$(find "$CERTS_DIR" -name "*.key" 2>/dev/null | head -1)
-
-    if [[ -z "$CERT_FILE" || -z "$KEY_FILE" ]]; then
-        echo -e "${WARN} Certs missing from ${CERTS_DIR}, generating via tailscale..."
-        mkdir -p "$CERTS_DIR"
-        CERT_TMPDIR=$(mktemp -d)
-        TAILSCALE_HOSTNAME=$(tailscale status --json | python3 -c "import sys,json; print(json.load(sys.stdin)['Self']['DNSName'].rstrip('.'))")
-        (cd "$CERT_TMPDIR" && sudo tailscale cert "$TAILSCALE_HOSTNAME")
-        sudo cp "$CERT_TMPDIR/${TAILSCALE_HOSTNAME}.crt" "$CERTS_DIR/"
-        sudo cp "$CERT_TMPDIR/${TAILSCALE_HOSTNAME}.key" "$CERTS_DIR/"
-        sudo chown "$USER" "$CERTS_DIR/${TAILSCALE_HOSTNAME}.crt" "$CERTS_DIR/${TAILSCALE_HOSTNAME}.key"
-        sudo rm -rf "$CERT_TMPDIR"
-        CERT_FILE="$CERTS_DIR/${TAILSCALE_HOSTNAME}.crt"
-        KEY_FILE="$CERTS_DIR/${TAILSCALE_HOSTNAME}.key"
-        echo -e "${PASS} Certs saved to ${CERTS_DIR}"
-    else
-        echo -e "${PASS} Certs found in ${CERTS_DIR}"
-    fi
-
-    if lsof -i :"$VSCODE_PORT" -sTCP:LISTEN &>/dev/null; then
-        echo -e "${FAIL} Port ${VSCODE_PORT} is in use. code-server cannot start."
-        exit 1
-    fi
-
-    echo -e "${PASS} Starting code-server on port ${VSCODE_PORT}..."
-    RETURN_DIR="$PWD"
-    trap 'cd "$RETURN_DIR"' EXIT
-    cd ~
-    code-server --bind-addr "0.0.0.0:${VSCODE_PORT}" --cert "$CERT_FILE" --cert-key "$KEY_FILE"
-else
     initiate
     if [[ "$WATCH" == true ]]; then
         while lsof -i :"$PORT" -sTCP:LISTEN &>/dev/null; do
@@ -154,5 +102,4 @@ else
     else
         echo -e "${PASS} Running nanoc compile..."
         bundle exec nanoc compile
-    fi
 fi
