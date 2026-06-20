@@ -24,7 +24,7 @@ Options:
   -c, --clean            Remove output/ before running
   -n, --no-watch         Compile once only (no watch, no serve)
   -o, --host HOST        Bind the server to HOST (default: 127.0.0.1)
-                         Use 0.0.0.0 to listen on all interfaces
+  -i, --any-ip           Use 0.0.0.0 to listen on all interfaces
   -p, --port PORT        Listen on PORT (default: 3000)
   --restart-tailscale    Restart Tailscale and exit (no nanoc, no VS Code)
   -h, --help             Show this help message"
@@ -48,6 +48,10 @@ while [[ $# -gt 0 ]]; do
         -o|--host)
             HOST="$2"
             shift 2
+            ;;
+        -i|--any-ip)
+            HOST="0.0.0.0"
+            shift
             ;;
         -p|--port)
             PORT="$2"
@@ -90,16 +94,16 @@ if [[ "$CLEAN" == true ]]; then
     rm -rf output/
 fi
 
-    initiate
-    if [[ "$WATCH" == true ]]; then
-        while lsof -i :"$PORT" -sTCP:LISTEN &>/dev/null; do
-            echo -e "${WARN} Port ${PORT} is in use, trying $((PORT + 1))..."
-            PORT=$((PORT + 1))
-        done
-        echo -e "${PASS} Running nanoc compile, view and watch (${HOST}:${PORT})..."
-        bundle exec nanoc compile -W &
-        bundle exec nanoc view -L -o "$HOST" -p "$PORT"
-    else
-        echo -e "${PASS} Running nanoc compile..."
-        bundle exec nanoc compile
+initiate
+if [[ "$WATCH" == true ]]; then
+    while lsof -i :"$PORT" -sTCP:LISTEN &>/dev/null; do
+        echo -e "${WARN} Port ${PORT} is in use, trying $((PORT + 1))..."
+        PORT=$((PORT + 1))
+    done
+    echo -e "${PASS} Running nanoc compile, view and watch (${HOST}:${PORT})..."
+    bundle exec nanoc compile -W &
+    bundle exec nanoc view -L -o "$HOST" -p "$PORT"
+else
+    echo -e "${PASS} Running nanoc compile..."
+    bundle exec nanoc compile
 fi
