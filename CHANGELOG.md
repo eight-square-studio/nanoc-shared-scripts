@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-06-20
+
+- Extract VS Code / code-server functionality from `run.sh` into standalone `code-server.sh` — self-contained script (own colour constants, does not source `shared.sh`); removes `--vscode` and `--vport` flags from `run.sh`
+- Add `-i` / `--any-ip` flag to `run.sh` — shortcut for `--host 0.0.0.0` to listen on all interfaces
+
+## 2026-06-17
+
+- Add `-h` / `--help` flag to `check-layouts.sh` and `deploy.sh`
+
+## 2026-06-13
+
+- Make `templates/screenshot-overrides.js` font loading agnostic — no longer hardcodes specific font family names
+
+## 2026-05-18
+
+- Switch VS Code integration in `run.sh` from `code serve-web` to `code-server`; default port changed from `8000` to `8080`; auto-installs `code-server` via official install script if not found
+
 ## 2026-05-11
 
 - Add `--screenshot-only` / `-s` flag to `check-layouts.sh` — screenshots current branch only, skips release worktree setup, ImageMagick prereq, and comparison; generates a simple HTML gallery report and exits 0

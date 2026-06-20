@@ -39,7 +39,7 @@ bash ./nanoc-shared-scripts/validate.sh
 
 This checks your `nanoc.yaml` config, `.ruby-version`, GitHub Actions workflow,
 and AWS credentials, then writes a `.validated` timestamp file and creates
-`run.sh` / `deploy.sh` symlinks at the project root on success.
+`run.sh`, `deploy.sh`, and `check-layouts.sh` symlinks at the project root on success.
 
 ---
 
@@ -54,9 +54,9 @@ Sets up the environment and compiles the site.
 ./nanoc-shared-scripts/run.sh --no-watch             # one-off compile, then exit
 ./nanoc-shared-scripts/run.sh --clean                # wipe output/ before running
 ./nanoc-shared-scripts/run.sh --host 0.0.0.0         # listen on all interfaces (LAN/VPN)
+./nanoc-shared-scripts/run.sh --any-ip               # shortcut for --host 0.0.0.0
 ./nanoc-shared-scripts/run.sh --port 3003            # use a custom port (default 3000)
 ./nanoc-shared-scripts/run.sh -o 0.0.0.0 -p 3003     # combine host + port
-./nanoc-shared-scripts/run.sh --vscode               # restart Tailscale + launch VS Code web server (no nanoc)
 ./nanoc-shared-scripts/run.sh --restart-tailscale    # restart Tailscale and exit
 ```
 
@@ -64,9 +64,9 @@ Sets up the environment and compiles the site.
 |------|-------|--------|
 | `--clean` | `-c` | Remove `output/` before running |
 | `--no-watch` | `-n` | Compile once only, no file watching, no server |
-| `--host HOST` | `-o` | Bind the server to HOST (default: `127.0.0.1`). Use `0.0.0.0` to listen on all interfaces (useful for accessing the site from other devices on your network or over a Tailscale VPN) |
+| `--host HOST` | `-o` | Bind the server to HOST (default: `127.0.0.1`) |
+| `--any-ip` | `-i` | Use `0.0.0.0` to listen on all interfaces (useful for accessing the site from other devices on your network or over a Tailscale VPN) |
 | `--port PORT` | `-p` | Listen on PORT (default: `3000`) |
-| `--vscode` | | Restart Tailscale, then run `code serve-web` on `VSCODE_PORT` (default `8000`) in the foreground — blocks until VS Code exits. No nanoc. Exits with an error if port `8000` is already in use. Skips Tailscale/VS Code gracefully if not installed |
 | `--restart-tailscale` | | Restart Tailscale (`tailscale down` → `tailscale up`) and exit — no nanoc, no VS Code |
 | `--help` | `-h` | Show usage |
 
@@ -75,6 +75,18 @@ it finds a free one.
 
 Default (no flags): starts `nanoc compile -W` in watch mode and serves at
 `http://localhost:3000`.
+
+### code-server.sh — remote VS Code
+
+Standalone script to run `code-server` with TLS certs for remote browser access.
+
+```bash
+./nanoc-shared-scripts/code-server.sh                # run code-server on port 8080
+```
+
+Requires TLS certs at `~/.config/certs/` (a `.crt` and `.key` file). Auto-installs
+`code-server` via the official install script if not found. Binds to `0.0.0.0:8080`.
+Exits with an error if certs are missing or the port is already in use.
 
 ### deploy.sh — production deploy
 

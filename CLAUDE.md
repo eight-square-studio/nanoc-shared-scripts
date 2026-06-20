@@ -14,15 +14,18 @@ Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 ## Repo structure
 
 ```
-shared.sh          # Sourced by all other scripts — setup functions, colours, vars
+shared.sh          # Sourced by other scripts — setup functions, colours, vars
 deploy.sh          # S3 sync, CloudFront invalidation, release tagging
-run.sh             # Watch + serve (default), one-off compile (--no-watch), VS Code server (--vscode)
+run.sh             # Watch + serve (default), one-off compile (--no-watch)
+code-server.sh     # Standalone: run code-server with TLS certs (does not source shared.sh)
 validate.sh        # One-time setup check; writes .validated and creates symlinks
 check-layouts.sh   # Visual regression screenshot comparison (current branch vs release)
 tools/
-  screenshot-compare.rb  # Ruby script called by check-layouts.sh
+  screenshot-compare.rb      # Ruby script called by check-layouts.sh
 templates/
-  deploy.yml       # Full workflow — copied into consumer projects by validate.sh
+  deploy.yml                 # Full workflow — copied into consumer projects by validate.sh
+  Gemfile                    # Baseline Gemfile — copied into project root if missing
+  screenshot-overrides.js    # JS injected before screenshots — copied into project root if missing
 CLAUDE.md
 README.md
 ```
@@ -32,7 +35,7 @@ README.md
 ## Scripts
 
 ### shared.sh
-Not called directly — sourced by `deploy.sh`, `run.sh`, and `validate.sh`.
+Not called directly — sourced by `deploy.sh`, `run.sh`, `check-layouts.sh`, and `validate.sh`.
 
 Sets `current_dir` to `$PWD` (the calling script's working directory — i.e. the project root).
 All scripts must be run from the project root; `deploy.sh` and `run.sh` enforce this with a
@@ -53,14 +56,13 @@ All scripts must be run from the project root; `deploy.sh` and `run.sh` enforce 
 Sets up the environment then compiles the site.
 
 ```
-Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-o|--host HOST] [-p|--port PORT] [--vscode] [--vport PORT] [--restart-tailscale] [-h|--help]
+Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-o|--host HOST] [-i|--any-ip] [-p|--port PORT] [--restart-tailscale] [-h|--help]
 
   -c, --clean            Remove output/ before running
   -n, --no-watch         Compile once only (no watch, no serve)
-  -o, --host HOST        Bind the server to HOST (default: 127.0.0.1; use 0.0.0.0 for all interfaces)
+  -o, --host HOST        Bind the server to HOST (default: 127.0.0.1)
+  -i, --any-ip           Use 0.0.0.0 to listen on all interfaces
   -p, --port PORT        Listen on PORT (default: 3000)
-  --vscode               Restart Tailscale, ensure TLS certs in ~/.config/certs/, then launch code-server on VSCODE_PORT=8080 (no nanoc)
-  --vport PORT           code-server port (default: 8080)
   --restart-tailscale    Restart Tailscale and exit (no nanoc, no VS Code)
   -h, --help             Show this help message
 ```
@@ -70,11 +72,21 @@ Default (no flags): runs `nanoc compile -W` in the background and `nanoc view -L
 
 With `--no-watch`: runs `nanoc compile` once and exits.
 
-With `--vscode`: restarts Tailscale, checks `~/.config/certs/` for a `.crt`/`.key` pair — if missing, runs `sudo tailscale cert <hostname>` in a temp dir, copies the files to `~/.config/certs/` (creating it if needed), and chowns them to the current user. Then runs `code-server` on port `VSCODE_PORT` (default `8080`) from `~`, with TLS certs passed via `--cert`/`--cert-key`. Auto-installs `code-server` via the official install script (`curl -fsSL https://code-server.dev/install.sh | sh`) if not found. Errors and exits if port `VSCODE_PORT` is already in use. On exit, traps and returns to the original working directory. Mutually exclusive with nanoc (`--vscode` and nanoc share an if/else branch).
-
-Use `--vport` to override the default port: `./run.sh --vscode --vport 9000`.
-
 With `--restart-tailscale`: restarts Tailscale (`tailscale down` → `tailscale up`) and exits — no nanoc, no VS Code.
+
+### code-server.sh
+Standalone script to run `code-server` with TLS certs for remote browser access.
+Does **not** source `shared.sh` — defines its own colour constants and exit trap.
+
+Checks `~/.config/certs/` for a `.crt`/`.key` pair — exits with an error if missing.
+Auto-installs `code-server` via the official install script (`curl -fsSL https://code-server.dev/install.sh | sh`)
+if not found. Runs `code-server` on port `8080` from `~`, bound to `0.0.0.0`, with TLS certs
+passed via `--cert`/`--cert-key`. Errors and exits if port `8080` is already in use. On exit,
+traps and returns to the original working directory.
+
+```bash
+bash ./nanoc-shared-scripts/code-server.sh
+```
 
 ### deploy.sh
 Full production deploy pipeline. Must be run from the project root
@@ -195,7 +207,7 @@ Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`
 - CI skips all setup checks when `$CI` env var is set
 - `current_dir` is set to `$PWD` in `shared.sh` — scripts must always be run from the project root
 - Hash commands handle both platforms via `sha256_file()`: `sha256sum` (Linux) and `shasum -a 256` (macOS)
-- `deploy.sh`, `run.sh`, and `check-layouts.sh` resolve symlinks before sourcing `shared.sh` (they're accessed via symlinks from the project root); `validate.sh` uses the simpler `source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"` since it's always run directly — `shared.sh` must always live in the same directory as the scripts that source it
+- `deploy.sh`, `run.sh`, and `check-layouts.sh` resolve symlinks before sourcing `shared.sh` (they're accessed via symlinks from the project root); `validate.sh` uses the simpler `source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"` since it's always run directly — `shared.sh` must always live in the same directory as the scripts that source it; `code-server.sh` is self-contained (does not source `shared.sh`)
 - `check-layouts.sh` passes `PROJECT_DIR="$current_dir"` to `tools/screenshot-compare.rb` via env var — the Ruby script uses this to locate consumer project files rather than resolving paths relative to `__dir__`
 - Colour/formatting constants (`PASS`, `FAIL`, etc.) are defined in `shared.sh`
 
