@@ -20,6 +20,7 @@ run.sh             # Watch + serve (default), one-off compile (--no-watch)
 code-server.sh     # Standalone: run code-server with TLS certs (does not source shared.sh)
 validate.sh        # One-time setup check; writes .validated and creates symlinks
 check-layouts.sh   # Visual regression screenshot comparison (current branch vs release)
+generate-transcripts.sh # Batch-generate WebVTT caption transcripts for a folder of videos (whisper.cpp)
 tools/
   screenshot-compare.rb      # Ruby script called by check-layouts.sh
 templates/
@@ -153,6 +154,39 @@ Flags pages where >1% of pixels changed. Opens report automatically on completio
 
 **Exit code:** 1 if any pages are flagged, 0 if all pass.
 
+### generate-transcripts.sh
+Batch-generates WebVTT (`.vtt`) caption transcripts for a folder of videos, using
+`whisper.cpp`'s `whisper-cli`. Must be run from the project root (`nanoc.yaml`
+presence check, like `deploy.sh`/`run.sh`).
+
+```
+Usage: ./generate-transcripts.sh <folder> [--force] [--model NAME] [--language LANG] [--dry-run] [-h|--help]
+
+  --force             Regenerate even if a transcript already exists
+  --model NAME        whisper.cpp model name, e.g. tiny.en/base.en/small.en/medium.en (default: base.en)
+  --language LANG     Spoken language code passed to whisper (default: en)
+  --dry-run           List videos that would be processed, without transcribing
+  -h, --help          Show this help message
+```
+
+Searches `<folder>` **recursively** for `*.mp4 *.mov *.m4v *.webm` files. Output is
+always flattened into `content/videos/transcripts/<video-basename>.vtt` regardless
+of which subfolder the source video lives in — this matches consumer projects'
+basename-only transcript lookup convention (e.g. `lib/helpers.rb`'s
+`video_transcript_path` in `thom-portfolio`).
+
+**Per-video pipeline:**
+1. Skip if a transcript already exists for that basename (unless `--force`).
+2. Extract mono 16kHz WAV via `ffmpeg` (whisper-cli only reads flac/mp3/ogg/wav, not mp4/mov directly).
+3. Transcribe with `whisper-cli -sns -ovtt` (`-sns` suppresses non-speech hallucination tokens like `[Music]`).
+4. Validate the output: strip any stray leading blank line before the `WEBVTT` signature (a malformed leading newline silently breaks every cue in spec-compliant parsers), and require at least one cue. If whisper detected no speech (music-only/visual-only clip), skip writing a file rather than producing an empty transcript — an empty transcript would incorrectly clear the "no audio" muted state consumer projects derive from transcript presence.
+5. Move the validated `.vtt` into `content/videos/transcripts/`.
+
+**Prerequisites (checked and auto-installed where possible):**
+- `ffmpeg` — auto-installed via `brew install ffmpeg` if missing
+- `whisper-cli` — auto-installed via `brew install whisper-cpp` if missing
+- Model file (`ggml-<NAME>.bin`) — auto-downloaded from Hugging Face (`ggerganov/whisper.cpp`) into `~/.cache/whisper-models/` if not already cached
+
 ### validate.sh
 One-time setup verification. Run after adding the submodule to a new project,
 or after a significant submodule update.
@@ -163,13 +197,14 @@ Checks:
 - `Gemfile` present — copies from `templates/Gemfile` if missing (existing Gemfiles are left untouched)
 - `screenshot-overrides.js` present — copies from `templates/screenshot-overrides.js` if missing (existing files left untouched); contains JS injected into each page before screenshotting to freeze animations/transitions; projects can customise their own copy
 - `.github/workflows/deploy.yml` always synced from `templates/deploy.yml` (copied/updated on every run); checks it contains the string `nanoc-shared-scripts` (satisfied by the `bash ./nanoc-shared-scripts/deploy.sh` run step)
-- `deploy.sh`, `run.sh`, `shared.sh`, `validate.sh`, `check-layouts.sh` are executable
+- `deploy.sh`, `run.sh`, `shared.sh`, `validate.sh`, `check-layouts.sh`, `generate-transcripts.sh` are executable
 - AWS credentials reachable via `sts get-caller-identity`
 
 On success writes `.validated` to the project root with a timestamp and the
-shared scripts git SHA, creates symlinks `run.sh`, `deploy.sh`, and `check-layouts.sh`
-at the project root, and adds all four (plus `.validated`) to `.gitignore`. All are
-local machine state only — recreated by validate on each machine.
+shared scripts git SHA, creates symlinks `run.sh`, `deploy.sh`, `check-layouts.sh`,
+and `generate-transcripts.sh` at the project root, and adds all five (plus
+`.validated`) to `.gitignore`. All are local machine state only — recreated by
+validate on each machine.
 
 ```bash
 bash ./nanoc-shared-scripts/validate.sh
@@ -207,7 +242,7 @@ Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`
 - CI skips all setup checks when `$CI` env var is set
 - `current_dir` is set to `$PWD` in `shared.sh` — scripts must always be run from the project root
 - Hash commands handle both platforms via `sha256_file()`: `sha256sum` (Linux) and `shasum -a 256` (macOS)
-- `deploy.sh`, `run.sh`, and `check-layouts.sh` resolve symlinks before sourcing `shared.sh` (they're accessed via symlinks from the project root); `validate.sh` uses the simpler `source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"` since it's always run directly — `shared.sh` must always live in the same directory as the scripts that source it; `code-server.sh` is self-contained (does not source `shared.sh`)
+- `deploy.sh`, `run.sh`, `check-layouts.sh`, and `generate-transcripts.sh` resolve symlinks before sourcing `shared.sh` (they're accessed via symlinks from the project root); `validate.sh` uses the simpler `source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"` since it's always run directly — `shared.sh` must always live in the same directory as the scripts that source it; `code-server.sh` is self-contained (does not source `shared.sh`)
 - `check-layouts.sh` passes `PROJECT_DIR="$current_dir"` to `tools/screenshot-compare.rb` via env var — the Ruby script uses this to locate consumer project files rather than resolving paths relative to `__dir__`
 - Colour/formatting constants (`PASS`, `FAIL`, etc.) are defined in `shared.sh`
 

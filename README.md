@@ -39,7 +39,8 @@ bash ./nanoc-shared-scripts/validate.sh
 
 This checks your `nanoc.yaml` config, `.ruby-version`, GitHub Actions workflow,
 and AWS credentials, then writes a `.validated` timestamp file and creates
-`run.sh`, `deploy.sh`, and `check-layouts.sh` symlinks at the project root on success.
+`run.sh`, `deploy.sh`, `check-layouts.sh`, and `generate-transcripts.sh` symlinks
+at the project root on success.
 
 ---
 
@@ -138,6 +139,39 @@ Before each screenshot, the tool injects `screenshot-overrides.js` from your pro
 
 The default freeze script handles animations, transitions, scroll-based fading, `is-visible` reveal classes, and web font + image loading.
 
+### generate-transcripts.sh — video transcripts
+
+Batch-generates WebVTT (`.vtt`) caption transcripts for a folder of videos, using
+`whisper.cpp` (local, no API key, nothing leaves the machine).
+
+```bash
+./nanoc-shared-scripts/generate-transcripts.sh content/videos                # recursively transcribe everything missing a transcript
+./nanoc-shared-scripts/generate-transcripts.sh content/videos/hsbc           # just one subfolder
+./nanoc-shared-scripts/generate-transcripts.sh content/videos --force        # regenerate existing transcripts too
+./nanoc-shared-scripts/generate-transcripts.sh content/videos --model small.en  # bigger/slower model for better accuracy
+./nanoc-shared-scripts/generate-transcripts.sh content/videos --dry-run      # preview what would be processed
+```
+
+| Flag | Effect |
+|------|--------|
+| `--force` | Regenerate even if a transcript already exists |
+| `--model NAME` | whisper.cpp model, e.g. `tiny.en`/`base.en`/`small.en`/`medium.en` (default: `base.en`) |
+| `--language LANG` | Spoken language code passed to whisper (default: `en`) |
+| `--dry-run` | List videos that would be processed, without transcribing |
+| `--help` | Show usage |
+
+Searches the given folder recursively for `.mp4`/`.mov`/`.m4v`/`.webm` files and
+writes each transcript to `content/videos/transcripts/<video-basename>.vtt` —
+flattened by basename regardless of which subfolder the video is in.
+
+**Prerequisites (auto-installed if missing):** `ffmpeg`, `whisper-cli` (via
+`brew install whisper-cpp`), and a `ggml-<model>.bin` file (auto-downloaded to
+`~/.cache/whisper-models/` on first use).
+
+Skips videos that already have a transcript (idempotent — safe to rerun after
+adding new videos), and skips videos where no speech was detected rather than
+writing an empty transcript.
+
 ### validate.sh — setup check
 
 One-time verification after adding the submodule or updating it significantly.
@@ -150,8 +184,9 @@ Copies `templates/Gemfile` into the project root if no `Gemfile` exists (existin
 Gemfiles are left untouched). Copies `templates/screenshot-overrides.js` if missing —
 this JS is injected into pages before screenshotting to freeze animations; customise
 per-project as needed. Writes `.validated` to the project root on success.
-Creates `run.sh`, `deploy.sh`, and `check-layouts.sh` symlinks and adds all four
-(plus `.validated`) to `.gitignore` — local machine state only, not committed.
+Creates `run.sh`, `deploy.sh`, `check-layouts.sh`, and `generate-transcripts.sh`
+symlinks and adds all five (plus `.validated`) to `.gitignore` — local machine
+state only, not committed.
 
 ---
 

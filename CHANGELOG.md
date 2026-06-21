@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-06-21
+
+- Add `generate-transcripts.sh` — batch-generates WebVTT caption transcripts for a folder of videos via `whisper.cpp` (local, no API key); recursively finds videos, skips ones that already have a transcript, validates/sanitises the `WEBVTT` signature, and skips writing a transcript when no speech is detected
+- Wire `generate-transcripts.sh` into `validate.sh` (executable check, `.gitignore` entry, symlink creation)
+
 ## 2026-06-20
 
 - Extract VS Code / code-server functionality from `run.sh` into standalone `code-server.sh` — self-contained script (own colour constants, does not source `shared.sh`); removes `--vscode` and `--vport` flags from `run.sh`
