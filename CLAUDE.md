@@ -21,6 +21,8 @@ code-server.sh     # Standalone: run code-server with TLS certs (does not source
 validate.sh        # One-time setup check; writes .validated and creates symlinks
 check-layouts.sh   # Visual regression screenshot comparison (current branch vs release)
 generate-transcripts.sh # Batch-generate WebVTT caption transcripts for a folder of videos (whisper.cpp)
+lib/
+  shared_helpers.rb          # Shared Ruby/nanoc helpers — required from a consumer's lib/helpers.rb
 tools/
   screenshot-compare.rb      # Ruby script called by check-layouts.sh
 templates/
@@ -186,6 +188,33 @@ basename-only transcript lookup convention (e.g. `lib/helpers.rb`'s
 - `ffmpeg` — auto-installed via `brew install ffmpeg` if missing
 - `whisper-cli` — auto-installed via `brew install whisper-cpp` if missing
 - Model file (`ggml-<NAME>.bin`) — auto-downloaded from Hugging Face (`ggerganov/whisper.cpp`) into `~/.cache/whisper-models/` if not already cached
+
+### lib/shared_helpers.rb
+Generic nanoc helper methods (no dependency on any consumer project's content
+model) shared across consumer projects via `require_relative`:
+
+```ruby
+require_relative '../nanoc-shared-scripts/lib/shared_helpers'
+```
+
+Self-contained — declares its own `require 'kramdown'` / `require 'haml'`
+rather than relying on the consumer's `lib/helpers.rb` having required them
+first. Path-resolving helpers (`image_dimensions`, `video_transcript_path`)
+resolve against `Dir.pwd` (e.g. `File.join('content', path)`), not
+`File.dirname(__FILE__)` — this only works because nanoc commands and
+`run.sh`/`deploy.sh`/`validate.sh` are always run from the consumer project
+root. Provides: `make_slug`, `image_dimensions`, `image_attrs`,
+`video_transcript_path`, `make_haml`, `markdown_to_html`,
+`excerpt_from_markdown`, `date_parse`, `svg_icon` (+ the `SVG_Icons` class).
+
+**Visibility gotcha:** top-level `def`s become instance methods on `Object`,
+and bare `private`/`public` calls toggle a process-global default that
+persists across `require`d files in load order. `jpeg_dimensions` /
+`webp_dimensions` are marked `private` then immediately followed by an
+explicit `public` before the next method — this file must always end in the
+`public` state, or every method defined in files loaded afterward (including
+the consumer's own `lib/helpers.rb`) silently becomes private, breaking Haml
+template calls with `NoMethodError: private method`.
 
 ### validate.sh
 One-time setup verification. Run after adding the submodule to a new project,

@@ -1,7 +1,8 @@
 # nanoc-shared-scripts
 
-Shell scripts and a reusable GitHub Actions workflow for nanoc static sites.
-Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
+Shell scripts, a reusable GitHub Actions workflow, and shared Ruby/nanoc helpers
+for nanoc static sites. Consumed by nanoc project repos via git submodule at
+`nanoc-shared-scripts/`.
 
 Note:
 - macOS-primary, can be adapted to *nix environments.
@@ -187,6 +188,50 @@ per-project as needed. Writes `.validated` to the project root on success.
 Creates `run.sh`, `deploy.sh`, `check-layouts.sh`, and `generate-transcripts.sh`
 symlinks and adds all five (plus `.validated`) to `.gitignore` — local machine
 state only, not committed.
+
+---
+
+## Ruby helpers — `lib/shared_helpers.rb`
+
+Generic nanoc helper methods shared across consumer projects, to avoid each
+site re-implementing (and slowly diverging on) the same utility code.
+
+**Using it in a project:** add this near the top of your `lib/helpers.rb`,
+alongside your other `require`s:
+
+```ruby
+require_relative '../nanoc-shared-scripts/lib/shared_helpers'
+```
+
+The file is self-contained — it requires `kramdown` and `haml` itself, so it
+doesn't depend on your project's `lib/helpers.rb` having required them first.
+Both gems are already in `templates/Gemfile`. Path-resolving helpers
+(`image_dimensions`, `video_transcript_path`) assume the process's working
+directory is the project root, which holds for every nanoc command run via
+`run.sh`/`deploy.sh`/`bundle exec nanoc ...`.
+
+**What's in it:**
+
+| Helper | Purpose |
+|--------|---------|
+| `make_slug(text)` | Lowercase + dashes |
+| `image_dimensions(path)` | Reads pixel width/height from a PNG/JPEG/WebP file under `content/` (no gem — hand-rolled binary parsing); returns `{}` if missing/unreadable. Memoised per-process |
+| `image_attrs(src, alt, eager: false, **extra)` | Builds the attribute hash for a content `%img` — merges `image_dimensions(src)`, sets `loading: 'lazy'` unless `eager: true`, always sets `decoding: 'async'` |
+| `video_transcript_path(path)` | Returns `/videos/transcripts/{basename}.vtt` if that file exists under `content/`, else `nil` |
+| `make_haml(haml_string, locals = {})` | Renders an inline Haml string to HTML |
+| `markdown_to_html(blob)` | Converts a Kramdown Markdown string to HTML |
+| `excerpt_from_markdown(markdown, max_length)` | Renders Markdown to plain text, truncates at the last word boundary within `max_length`, appends `…` only if it actually truncated |
+| `date_parse(datetime)` | Parses a datetime string via `DateTime.parse` |
+| `svg_icon(name)` | Inline SVG icon from the shared icon set — `linkedin`, `external_link`, `book`, `email`, `arrow_right`, `arrow_down`, `scroll_down`, `success_check` |
+
+**If you extend this file:** top-level `def`s in Ruby land as instance methods
+on `Object`, and `private`/`public` visibility toggles persist across
+`require`d files in load order for the rest of the process. `jpeg_dimensions`
+and `webp_dimensions` are deliberately marked `private` then immediately
+followed by an explicit `public` before the next method def — keep that
+bookending if you add more private helpers, or every method defined in files
+loaded afterward (including the consumer's own `lib/helpers.rb`) will
+silently become private too.
 
 ---
 

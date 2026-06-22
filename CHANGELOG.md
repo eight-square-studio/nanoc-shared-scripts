@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-22
+
+- Add `lib/shared_helpers.rb` — generic Ruby/nanoc helpers (`make_slug`, `image_dimensions`, `image_attrs`, `video_transcript_path`, `make_haml`, `markdown_to_html`, `excerpt_from_markdown`, `date_parse`, `svg_icon`) shared across consumer projects via `require_relative`; consolidates code that had already drifted into duplicate copies in `eightsquarestudio.com` and `thom-portfolio`
+
 ## 2026-06-21
 
 - Add `generate-transcripts.sh` — batch-generates WebVTT caption transcripts for a folder of videos via `whisper.cpp` (local, no API key); recursively finds videos, skips ones that already have a transcript, validates/sanitises the `WEBVTT` signature, and skips writing a transcript when no speech is detected
