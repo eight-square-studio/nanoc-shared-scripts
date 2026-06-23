@@ -8,7 +8,7 @@ gem 'kramdown'
 gem 'nanoc-live'
 gem "webrick", "~> 1.9"
 
-gem "haml", "~> 5.2"
+gem "haml", "~> 7.2"
 
 group :nanoc do
   gem "nanoc-dart-sass", "~> 2.0"
