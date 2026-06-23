@@ -57,6 +57,19 @@ else
     check_pass "Gemfile copied from template"
 fi
 
+# --- Check: lib/helpers.rb requires the shared Ruby helpers ---
+helpers_file="$current_dir/lib/helpers.rb"
+shared_helpers_require="require_relative '../nanoc-shared-scripts/lib/shared_helpers'"
+if [[ -f "$helpers_file" ]]; then
+    if grep -q "nanoc-shared-scripts/lib/shared_helpers" "$helpers_file"; then
+        check_pass "lib/helpers.rb requires nanoc-shared-scripts/lib/shared_helpers"
+    else
+        check_fail "lib/helpers.rb does not require shared_helpers.rb — add this line near the top of lib/helpers.rb: ${shared_helpers_require}"
+    fi
+else
+    check_fail "lib/helpers.rb not found — create it with at least: ${shared_helpers_require}"
+fi
+
 # --- Check: screenshot-overrides.js exists; copy from template if missing ---
 if [[ -f "$current_dir/screenshot-overrides.js" ]]; then
     check_pass "screenshot-overrides.js found"

@@ -182,12 +182,16 @@ bash ./nanoc-shared-scripts/validate.sh
 ```
 
 Copies `templates/Gemfile` into the project root if no `Gemfile` exists (existing
-Gemfiles are left untouched). Copies `templates/screenshot-overrides.js` if missing —
-this JS is injected into pages before screenshotting to freeze animations; customise
-per-project as needed. Writes `.validated` to the project root on success.
-Creates `run.sh`, `deploy.sh`, `check-layouts.sh`, and `generate-transcripts.sh`
-symlinks and adds all five (plus `.validated`) to `.gitignore` — local machine
-state only, not committed.
+Gemfiles are left untouched). Checks that `lib/helpers.rb` requires
+`lib/shared_helpers.rb` — fails with the exact `require_relative` line to add
+if it's missing or the file doesn't exist (see Ruby helpers above); this isn't
+auto-fixed since it'd mean injecting a line into a file you own. Copies
+`templates/screenshot-overrides.js` if missing — this JS is injected into
+pages before screenshotting to freeze animations; customise per-project as
+needed. Writes `.validated` to the project root on success. Creates `run.sh`,
+`deploy.sh`, `check-layouts.sh`, and `generate-transcripts.sh` symlinks and
+adds all five (plus `.validated`) to `.gitignore` — local machine state only,
+not committed.
 
 ---
 

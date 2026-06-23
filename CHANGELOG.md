@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-23
+
+- Add `validate.sh` check — flags (does not auto-fix) when a consumer project's `lib/helpers.rb` is missing the `require_relative '../nanoc-shared-scripts/lib/shared_helpers'` line, with the exact line to add
+
 ## 2026-06-22
 
 - Add `lib/shared_helpers.rb` — generic Ruby/nanoc helpers (`make_slug`, `image_dimensions`, `image_attrs`, `video_transcript_path`, `make_haml`, `markdown_to_html`, `excerpt_from_markdown`, `date_parse`, `svg_icon`) shared across consumer projects via `require_relative`; consolidates code that had already drifted into duplicate copies in `eightsquarestudio.com` and `thom-portfolio`

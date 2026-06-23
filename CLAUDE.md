@@ -224,6 +224,7 @@ Checks:
 - `nanoc.yaml` present and contains `s3_bucket`, `cloudfront_distribution_id`, `aws_region`
 - `.ruby-version` present
 - `Gemfile` present — copies from `templates/Gemfile` if missing (existing Gemfiles are left untouched)
+- `lib/helpers.rb` requires `lib/shared_helpers.rb` — greps for `nanoc-shared-scripts/lib/shared_helpers`; fails (not auto-fixed) with the exact `require_relative` line to add if the require is missing, or to create the file with if `lib/helpers.rb` doesn't exist at all
 - `screenshot-overrides.js` present — copies from `templates/screenshot-overrides.js` if missing (existing files left untouched); contains JS injected into each page before screenshotting to freeze animations/transitions; projects can customise their own copy
 - `.github/workflows/deploy.yml` always synced from `templates/deploy.yml` (copied/updated on every run); checks it contains the string `nanoc-shared-scripts` (satisfied by the `bash ./nanoc-shared-scripts/deploy.sh` run step)
 - `deploy.sh`, `run.sh`, `shared.sh`, `validate.sh`, `check-layouts.sh`, `generate-transcripts.sh` are executable
