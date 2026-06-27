@@ -47,6 +47,18 @@ function get_ruby_version() {
     fi
 }
 
+function sudo_cmd(){
+    # Sets SUDO to "sudo" when needed/available, or "" when already root
+    # (e.g. inside a container) or when sudo isn't installed at all.
+    if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+        SUDO=""
+    elif command -v sudo &> /dev/null; then
+        SUDO="sudo"
+    else
+        SUDO=""
+    fi
+}
+
 function detect_pkg_manager(){
     # Sets PKG_MANAGER to brew (darwin), apt, dnf, pacman, zypper, or unknown
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -68,18 +80,19 @@ function pkg_install(){
     # Usage: pkg_install <apt_pkg> <dnf_pkg> <pacman_pkg> <zypper_pkg> <brew_pkg>
     local apt_pkg="$1" dnf_pkg="$2" pacman_pkg="$3" zypper_pkg="$4" brew_pkg="$5"
     [[ -z "${PKG_MANAGER:-}" ]] && detect_pkg_manager
+    [[ -z "${SUDO+x}" ]] && sudo_cmd
     case "$PKG_MANAGER" in
         apt)
-            sudo apt-get update -qq && sudo apt-get install -y "$apt_pkg"
+            ${SUDO} apt-get update -qq && ${SUDO} apt-get install -y "$apt_pkg"
             ;;
         dnf)
-            sudo dnf install -y "$dnf_pkg"
+            ${SUDO} dnf install -y "$dnf_pkg"
             ;;
         pacman)
-            sudo pacman -Sy --noconfirm "$pacman_pkg"
+            ${SUDO} pacman -Sy --noconfirm "$pacman_pkg"
             ;;
         zypper)
-            sudo zypper install -y "$zypper_pkg"
+            ${SUDO} zypper install -y "$zypper_pkg"
             ;;
         brew)
             brew install "$brew_pkg"
@@ -107,22 +120,26 @@ function check_for_build_deps(){
     # Linux-only: native libs ruby-build needs to compile Ruby from source
     [[ "$OSTYPE" == "darwin"* ]] && return 0
     [[ -z "${PKG_MANAGER:-}" ]] && detect_pkg_manager
+    [[ -z "${SUDO+x}" ]] && sudo_cmd
     echo -e "${PASS} Installing Ruby build dependencies via ${PKG_MANAGER}..."
     case "$PKG_MANAGER" in
         apt)
-            sudo apt-get update -qq
-            sudo apt-get install -y build-essential libssl-dev libreadline-dev zlib1g-dev libyaml-dev
+            ${SUDO} apt-get update -qq
+            ${SUDO} apt-get install -y build-essential libssl-dev libreadline-dev zlib1g-dev libyaml-dev
             ;;
         dnf)
-            sudo dnf groupinstall -y "Development Tools"
-            sudo dnf install -y openssl-devel readline-devel zlib-devel libyaml-devel
+            # Explicit packages rather than `dnf groupinstall "Development
+            # Tools"` — newer Fedora ships dnf5, which dropped the
+            # groupinstall subcommand syntax entirely (it's `dnf5 group
+            # install` now); explicit packages work on both dnf4 and dnf5.
+            ${SUDO} dnf install -y gcc gcc-c++ make patch git openssl-devel readline-devel zlib-devel libyaml-devel
             ;;
         pacman)
-            sudo pacman -Sy --noconfirm base-devel openssl readline zlib libyaml
+            ${SUDO} pacman -Sy --noconfirm base-devel openssl readline zlib libyaml
             ;;
         zypper)
-            sudo zypper install -y -t pattern devel_basis
-            sudo zypper install -y libopenssl-devel readline-devel zlib-devel libyaml-devel
+            ${SUDO} zypper install -y -t pattern devel_basis
+            ${SUDO} zypper install -y libopenssl-devel readline-devel zlib-devel libyaml-devel
             ;;
         *)
             echo -e "${WARN} No supported package manager found — install Ruby build dependencies manually (see https://github.com/rbenv/ruby-build/wiki)"
@@ -166,6 +183,11 @@ function check_for_rbenv(){
                 brew install rbenv
             else
                 curl -fsSL https://rbenv.org/install.sh | bash
+                # The official installer only wires ~/.rbenv/bin into
+                # .bash_profile for *future* shells — add it now so the
+                # rest of this script (and rbenv_init_path below, which
+                # itself shells out to `rbenv root`) can find it.
+                export PATH="$HOME/.rbenv/bin:$PATH"
             fi
             rbenv_init_path
             rbenv init - bash > /dev/null 2>&1 || true
@@ -181,7 +203,11 @@ function check_for_rbenv(){
 }
 
 function validate_and_install_ruby(){
-    ruby_value=`ruby -v`
+    # `ruby` may not exist on PATH at all yet (e.g. a fresh Linux box with
+    # no system Ruby) — macOS always ships one, which previously masked
+    # this. Treat "not found" the same as "wrong version" rather than
+    # letting the bare `ruby -v` call crash the script under set -e.
+    ruby_value="$(ruby -v 2>/dev/null || true)"
     if [[ "${ruby_value}" == *"${ruby_version}"* ]]; then
         echo -e "${PASS} ruby ${ruby_version} is installed"
     else

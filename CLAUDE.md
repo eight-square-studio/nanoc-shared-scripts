@@ -48,6 +48,7 @@ All scripts must be run from the project root; `deploy.sh` and `run.sh` enforce 
 |----------|---------|
 | `sha256_file()` | Cross-platform SHA256: `sha256sum` (Linux) or `shasum -a 256` (macOS) |
 | `get_ruby_version()` | Reads `.ruby-version` from CWD or defaults to `3.4.7` |
+| `sudo_cmd()` | Sets `SUDO` to `sudo` if needed and available, or `""` when already root (containers) or `sudo` isn't installed |
 | `detect_pkg_manager()` | Sets `PKG_MANAGER` to `brew` (macOS), `apt`, `dnf`, `pacman`, `zypper`, or `unknown` |
 | `pkg_install(...)` | Cross-distro install dispatcher — takes one package name per manager (apt/dnf/pacman/zypper/brew) and runs the right install command |
 | `port_in_use()` | Checks if a TCP port is listening — `lsof`, falling back to `ss`, falling back to a raw `/dev/tcp` probe |
@@ -132,7 +133,7 @@ Flags pages where >1% of pixels changed. Opens report automatically on completio
 
 **Prerequisites (checked and auto-installed where possible):**
 - ImageMagick (`compare`, `convert`) — auto-installed via `pkg_install` (brew on macOS, apt/dnf/pacman/zypper on Linux) if missing
-- A Chrome/Chromium binary (Ferrum uses it via CDP) — on macOS, `/Applications/Google Chrome.app` must be installed manually; on Linux, `check-layouts.sh`'s `find_browser()` checks for `google-chrome`, `google-chrome-stable`, `chromium-browser`, `chromium` in turn and auto-installs Chromium via `pkg_install` if none are found. The discovered binary path is exported as `CHROME_PATH` and passed through to `Ferrum::Browser.new(browser_path: ...)` in `tools/screenshot-compare.rb`.
+- A Chrome/Chromium binary (Ferrum uses it via CDP) — on macOS, `/Applications/Google Chrome.app` must be installed manually; on Linux, `check-layouts.sh`'s `find_browser()` checks `google-chrome`, `google-chrome-stable`, `chromium-browser`, `chromium` in turn, validating each candidate actually runs (`--version`) rather than trusting `command -v` alone — on Debian/Ubuntu, `chromium`/`chromium-browser` from apt are Snap-transitional stub scripts that exist on `PATH` but don't work without a running snapd (true in most containers and commonly under WSL2). If no working binary is found, auto-installs Chromium via `pkg_install`, then falls back to installing Google Chrome from its official apt repo (x86_64 only — no arm64 `.deb`), then to `snap install chromium` as a last resort. The discovered binary path is exported as `CHROME_PATH` and passed through to `Ferrum::Browser.new(browser_path: ...)` in `tools/screenshot-compare.rb`, which also adds `--no-sandbox`/`--disable-dev-shm-usage` automatically when running as root (containers/CI) — Chrome refuses its sandbox as root, and a container's default 64MB `/dev/shm` otherwise crashes the renderer before Ferrum can read its DevTools websocket URL.
 - `ferrum` gem — auto-added to consumer `Gemfile` if missing, then installed via `bundle install`
 
 **Path resolution:** Script uses `PROJECT_DIR` and `CHROME_PATH` env vars (set by the shell script) to locate `content/pages/`, `tmp/screenshots/`, the git worktree, and the browser binary. The Ruby script at `tools/screenshot-compare.rb` must always be invoked via `check-layouts.sh` — calling it directly without `PROJECT_DIR` set will abort with an error.

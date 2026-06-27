@@ -28,7 +28,8 @@ function check_for_awscli(){
             echo -e "${WARN} awscli not found, installing AWS CLI v2 for Linux (${arch})..."
             curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${arch}.zip" -o "$tmp_zip"
             unzip -q "$tmp_zip" -d "$(dirname "$tmp_zip")"
-            sudo "$(dirname "$tmp_zip")/aws/install"
+            sudo_cmd
+            ${SUDO} "$(dirname "$tmp_zip")/aws/install"
             if command -v aws &> /dev/null; then
                 echo -e "${PASS} awscli installed"
             else
@@ -69,7 +70,9 @@ function check_aws_auth() {
         fi
     fi
     # Local: check env vars, then fall back to interactive login
-    if [[ -n "$AWS_ACCESS_KEY_ID" && -n "$AWS_SECRET_ACCESS_KEY" ]]; then
+    # (use :- defaults — these are commonly unset entirely for devs who
+    # authenticate via ~/.aws/credentials or SSO instead of env vars)
+    if [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
         echo -e "${PASS} AWS credentials found in environment"
     fi
     if aws sts get-caller-identity &>/dev/null; then

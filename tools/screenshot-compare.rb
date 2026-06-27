@@ -20,6 +20,13 @@ def log(msg) = puts("▶ #{msg}")
 def new_browser
   opts = { headless: true, window_size: [1440, 900] }
   opts[:browser_path] = CHROME_PATH if CHROME_PATH && !CHROME_PATH.empty?
+  # Chrome refuses to launch its sandbox as root (common in CI/containers).
+  # Containers also typically cap /dev/shm at 64MB, which crashes Chrome's
+  # renderer before it can print its websocket URL — disable shared-memory
+  # usage too. Both only apply when running as root.
+  if Process.uid.zero?
+    opts[:browser_options] = { 'no-sandbox' => nil, 'disable-dev-shm-usage' => nil }
+  end
   Ferrum::Browser.new(**opts)
 end
 

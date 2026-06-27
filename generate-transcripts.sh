@@ -106,11 +106,12 @@ function check_for_ffmpeg() {
 function build_whisper_cpp_from_source() {
     echo -e "${WARN} whisper-cli not packaged for this distro — building whisper.cpp from source..."
     detect_pkg_manager
+    sudo_cmd
     case "$PKG_MANAGER" in
-        apt) sudo apt-get update -qq && sudo apt-get install -y build-essential cmake git ;;
-        dnf) sudo dnf install -y gcc gcc-c++ make cmake git ;;
-        pacman) sudo pacman -Sy --noconfirm base-devel cmake git ;;
-        zypper) sudo zypper install -y gcc gcc-c++ make cmake git ;;
+        apt) ${SUDO} apt-get update -qq && ${SUDO} apt-get install -y build-essential cmake git ;;
+        dnf) ${SUDO} dnf install -y gcc gcc-c++ make cmake git ;;
+        pacman) ${SUDO} pacman -Sy --noconfirm base-devel cmake git ;;
+        zypper) ${SUDO} zypper install -y gcc gcc-c++ make cmake git ;;
         *) echo -e "${WARN} Could not install build deps automatically — ensure a C/C++ toolchain, cmake and git are installed" ;;
     esac
     local build_dir
