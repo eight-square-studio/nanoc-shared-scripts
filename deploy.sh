@@ -20,8 +20,21 @@ function check_for_awscli(){
             brew install awscli
             echo -e "${PASS} awscli installed"
         else
-            echo -e "${FAIL} Please install awscli: https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html"
-            exit 4
+            command -v unzip &> /dev/null || pkg_install unzip unzip unzip unzip unzip
+            local arch
+            arch="$(uname -m)"
+            local tmp_zip
+            tmp_zip="$(mktemp -d)/awscliv2.zip"
+            echo -e "${WARN} awscli not found, installing AWS CLI v2 for Linux (${arch})..."
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${arch}.zip" -o "$tmp_zip"
+            unzip -q "$tmp_zip" -d "$(dirname "$tmp_zip")"
+            sudo "$(dirname "$tmp_zip")/aws/install"
+            if command -v aws &> /dev/null; then
+                echo -e "${PASS} awscli installed"
+            else
+                echo -e "${FAIL} awscli install failed — install manually: https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html"
+                exit 4
+            fi
         fi
     else
         echo -e "${PASS} awscli has been found"

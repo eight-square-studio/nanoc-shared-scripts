@@ -3,6 +3,12 @@
 ## 2026-06-27
 
 - Move `shared.sh` to `lib/_shared.sh` and update all `source` references in `deploy.sh`, `run.sh`, `check-layouts.sh`, `validate.sh`, and `generate-transcripts.sh`
+- Add Linux support across all local setup paths: `lib/_shared.sh` gains `detect_pkg_manager()`/`pkg_install()` (apt/dnf/pacman/zypper, alongside brew), `port_in_use()`, and `check_for_build_deps()`; `check_os_type()`/`check_for_rbenv()`/`validate_and_install_ruby()` use them on Linux instead of erroring out
+- `deploy.sh` installs AWS CLI v2 on Linux via the official zip installer instead of just printing a manual-install message
+- `check-layouts.sh` installs ImageMagick via the detected package manager and auto-detects/installs a Chrome/Chromium binary on Linux (was hardcoded to `/Applications/Google Chrome.app`); the discovered binary path is passed to Ferrum via `CHROME_PATH`
+- `generate-transcripts.sh` installs `ffmpeg`/`whisper-cli` via the detected package manager on Linux, falling back to building `whisper.cpp` from source when it isn't packaged
+- `run.sh` and `code-server.sh` no longer hard-depend on `lsof` for port checks — fall back to `ss`, then a raw `/dev/tcp` probe
+- `tools/screenshot-compare.rb` opens the HTML report with `xdg-open` on Linux (was `open`-only) and respects `CHROME_PATH` when launching Ferrum
 
 ## 2026-06-23
 

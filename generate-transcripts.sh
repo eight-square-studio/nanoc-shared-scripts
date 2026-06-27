@@ -92,16 +92,41 @@ MODEL_PATH="${MODEL_DIR}/ggml-${MODEL_NAME}.bin"
 
 function check_for_ffmpeg() {
     if ! command -v ffmpeg &> /dev/null; then
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            echo -e "${WARN} ffmpeg not found, installing via brew..."
-            brew install ffmpeg
-        else
-            echo -e "${FAIL} Please install ffmpeg: https://ffmpeg.org/download.html"
+        echo -e "${WARN} ffmpeg not found, installing..."
+        pkg_install ffmpeg ffmpeg ffmpeg ffmpeg ffmpeg
+        if ! command -v ffmpeg &> /dev/null; then
+            echo -e "${FAIL} ffmpeg install failed — install manually: https://ffmpeg.org/download.html"
             exit 2
         fi
     else
         echo -e "${PASS} ffmpeg found"
     fi
+}
+
+function build_whisper_cpp_from_source() {
+    echo -e "${WARN} whisper-cli not packaged for this distro — building whisper.cpp from source..."
+    detect_pkg_manager
+    case "$PKG_MANAGER" in
+        apt) sudo apt-get update -qq && sudo apt-get install -y build-essential cmake git ;;
+        dnf) sudo dnf install -y gcc gcc-c++ make cmake git ;;
+        pacman) sudo pacman -Sy --noconfirm base-devel cmake git ;;
+        zypper) sudo zypper install -y gcc gcc-c++ make cmake git ;;
+        *) echo -e "${WARN} Could not install build deps automatically — ensure a C/C++ toolchain, cmake and git are installed" ;;
+    esac
+    local build_dir
+    build_dir="$(mktemp -d)/whisper.cpp"
+    git clone --depth 1 https://github.com/ggerganov/whisper.cpp "$build_dir"
+    (cd "$build_dir" && make -j"$(nproc 2>/dev/null || echo 2)")
+    mkdir -p "${HOME}/.local/bin"
+    local built_bin
+    built_bin="$(find "$build_dir" -maxdepth 3 -type f -name "whisper-cli" | head -1)"
+    if [[ -z "$built_bin" ]]; then
+        echo -e "${FAIL} whisper.cpp build did not produce a whisper-cli binary"
+        exit 3
+    fi
+    cp "$built_bin" "${HOME}/.local/bin/whisper-cli"
+    export PATH="${HOME}/.local/bin:${PATH}"
+    echo -e "${PASS} whisper-cli built and installed to ${HOME}/.local/bin/whisper-cli"
 }
 
 function check_for_whisper() {
@@ -110,7 +135,14 @@ function check_for_whisper() {
             echo -e "${WARN} whisper-cli not found, installing via brew (whisper-cpp)..."
             brew install whisper-cpp
         else
-            echo -e "${FAIL} Please install whisper.cpp: https://github.com/ggml-org/whisper.cpp"
+            echo -e "${WARN} whisper-cli not found, attempting install via package manager..."
+            pkg_install whisper-cpp whisper-cpp whisper-cpp whisper-cpp whisper-cpp || true
+            if ! command -v whisper-cli &> /dev/null; then
+                build_whisper_cpp_from_source
+            fi
+        fi
+        if ! command -v whisper-cli &> /dev/null; then
+            echo -e "${FAIL} whisper-cli install failed — install manually: https://github.com/ggml-org/whisper.cpp"
             exit 3
         fi
     else

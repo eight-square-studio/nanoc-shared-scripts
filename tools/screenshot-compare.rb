@@ -11,10 +11,30 @@ PROJECT_DIR     = ENV.fetch('PROJECT_DIR') { abort 'PROJECT_DIR env var not set 
 TMP_BASE        = File.join(PROJECT_DIR, 'tmp', 'screenshots')
 WORKTREE        = File.join(PROJECT_DIR, 'tmp', 'worktree-release')
 SCREENSHOT_ONLY = ENV['SCREENSHOT_ONLY'] == '1'
+CHROME_PATH     = ENV['CHROME_PATH']
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def log(msg) = puts("▶ #{msg}")
+
+def new_browser
+  opts = { headless: true, window_size: [1440, 900] }
+  opts[:browser_path] = CHROME_PATH if CHROME_PATH && !CHROME_PATH.empty?
+  Ferrum::Browser.new(**opts)
+end
+
+def open_report(path)
+  opener = if RUBY_PLATFORM =~ /darwin/
+             'open'
+           elsif system('command -v xdg-open > /dev/null 2>&1')
+             'xdg-open'
+           end
+  if opener
+    system("#{opener} \"#{path}\"")
+  else
+    log "Open the report manually: #{path}"
+  end
+end
 
 def wait_for_port(port, timeout: 30)
   deadline = Time.now + timeout
@@ -234,7 +254,7 @@ if SCREENSHOT_ONLY
   log "Found #{current_pages.size} pages"
 
   current_pid = start_server(3000, dir: PROJECT_DIR)
-  browser = Ferrum::Browser.new(headless: true, window_size: [1440, 900])
+  browser = new_browser
   begin
     screenshot_pages(current_pages, 'http://localhost:3000', "#{TMP_BASE}/current", browser)
   ensure
@@ -244,7 +264,7 @@ if SCREENSHOT_ONLY
 
   report_path = "#{TMP_BASE}/report.html"
   generate_screenshot_report(current_pages, "#{TMP_BASE}/current", report_path)
-  `open "#{report_path}"`
+  open_report(report_path)
   log "Done — #{current_pages.size} pages screenshotted"
   exit 0
 end
@@ -264,7 +284,7 @@ release_pages = discover_pages(WORKTREE)
 log "Found #{release_pages.size} pages in release"
 
 release_pid = start_server(3001, dir: WORKTREE)
-browser = Ferrum::Browser.new(headless: true, window_size: [1440, 900])
+browser = new_browser
 begin
   screenshot_pages(release_pages, 'http://localhost:3001', "#{TMP_BASE}/release", browser)
 ensure
@@ -281,7 +301,7 @@ current_pages = discover_pages(PROJECT_DIR)
 log "Found #{current_pages.size} pages in current"
 
 current_pid = start_server(3000, dir: PROJECT_DIR)
-browser = Ferrum::Browser.new(headless: true, window_size: [1440, 900])
+browser = new_browser
 begin
   screenshot_pages(current_pages, 'http://localhost:3000', "#{TMP_BASE}/current", browser)
 ensure
@@ -315,7 +335,7 @@ end
 
 report_path = "#{TMP_BASE}/report.html"
 generate_report(results, report_path)
-`open "#{report_path}"`
+open_report(report_path)
 
 flagged = results.count { |r| r[:flagged] }
 log "Done — #{flagged}/#{results.size} pages flagged"

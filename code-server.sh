@@ -38,7 +38,18 @@ else
     echo -e "${PASS} Certs found in ${CERTS_DIR}"
 fi
 
-if lsof -i :"$VSCODE_PORT" -sTCP:LISTEN &>/dev/null; then
+function port_in_use() {
+    local port="$1"
+    if command -v lsof &> /dev/null; then
+        lsof -i :"$port" -sTCP:LISTEN &>/dev/null
+    elif command -v ss &> /dev/null; then
+        ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${port}\$"
+    else
+        (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && { exec 3>&-; return 0; } || return 1
+    fi
+}
+
+if port_in_use "$VSCODE_PORT"; then
     echo -e "${FAIL} Port ${VSCODE_PORT} is in use. code-server cannot start."
     exit 1
 fi

@@ -41,8 +41,8 @@ done
 
 # ── Prereqs: ImageMagick ──────────────────────────────────────────────────────
 if [[ "$SCREENSHOT_ONLY" -eq 0 ]] && { ! command -v compare &>/dev/null || ! command -v convert &>/dev/null; }; then
-    echo -e "${WARN} ImageMagick not found — installing via Homebrew..."
-    brew install imagemagick
+    echo -e "${WARN} ImageMagick not found — installing..."
+    pkg_install imagemagick ImageMagick imagemagick imagemagick imagemagick
     if ! command -v compare &>/dev/null; then
         echo -e "${FAIL} ImageMagick install failed"
         exit 1
@@ -50,13 +50,41 @@ if [[ "$SCREENSHOT_ONLY" -eq 0 ]] && { ! command -v compare &>/dev/null || ! com
 fi
 if [[ "$SCREENSHOT_ONLY" -eq 0 ]]; then echo -e "${PASS} ImageMagick available"; fi
 
-# ── Prereqs: Google Chrome ────────────────────────────────────────────────────
-if [[ ! -d "/Applications/Google Chrome.app" ]]; then
-    echo -e "${FAIL} Google Chrome not found at /Applications/Google Chrome.app"
-    echo "Install from https://www.google.com/chrome/ then re-run."
-    exit 1
+# ── Prereqs: Chrome/Chromium ──────────────────────────────────────────────────
+function find_browser() {
+    # Sets CHROME_PATH if a usable browser binary is found; returns 1 otherwise
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if [[ -d "/Applications/Google Chrome.app" ]]; then
+            CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            return 0
+        fi
+        return 1
+    fi
+    local bin
+    for bin in google-chrome google-chrome-stable chromium-browser chromium; do
+        if command -v "$bin" &>/dev/null; then
+            CHROME_PATH="$(command -v "$bin")"
+            return 0
+        fi
+    done
+    return 1
+}
+
+if ! find_browser; then
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo -e "${FAIL} Google Chrome not found at /Applications/Google Chrome.app"
+        echo "Install from https://www.google.com/chrome/ then re-run."
+        exit 1
+    fi
+    echo -e "${WARN} No Chrome/Chromium binary found — installing Chromium..."
+    pkg_install chromium chromium chromium chromium chromium || pkg_install chromium-browser chromium chromium chromium chromium
+    if ! find_browser; then
+        echo -e "${FAIL} Chromium install failed — install Chrome or Chromium manually and re-run."
+        exit 1
+    fi
 fi
-echo -e "${PASS} Google Chrome found"
+export CHROME_PATH
+echo -e "${PASS} Browser found: ${CHROME_PATH}"
 
 # ── Ruby, bundler, gems ───────────────────────────────────────────────────────
 if ! grep -q "ferrum" "$current_dir/Gemfile"; then
@@ -72,4 +100,4 @@ fi
 initiate
 
 # ── Execute ───────────────────────────────────────────────────────────────────
-PROJECT_DIR="$current_dir" SCREENSHOT_ONLY="$SCREENSHOT_ONLY" exec bundle exec ruby "$SHARED_SCRIPTS_DIR/tools/screenshot-compare.rb"
+PROJECT_DIR="$current_dir" SCREENSHOT_ONLY="$SCREENSHOT_ONLY" CHROME_PATH="$CHROME_PATH" exec bundle exec ruby "$SHARED_SCRIPTS_DIR/tools/screenshot-compare.rb"

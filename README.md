@@ -5,8 +5,8 @@ for nanoc static sites. Consumed by nanoc project repos via git submodule at
 `nanoc-shared-scripts/`.
 
 Note:
-- macOS-primary, can be adapted to *nix environments.
-- Setup currently checks require Homebrew and rbenv installed.
+- Supports macOS (via Homebrew) and Linux (apt/dnf/pacman/zypper, auto-detected) for local setup.
+- rbenv is installed automatically if missing (via Homebrew on macOS, the official installer on Linux).
 - All setup is skipped in CI environments (`$CI` env var).
 
 ---
@@ -101,7 +101,7 @@ containing `nanoc.yaml`).
 
 **What it does:**
 1. Wipes `output/` and recompiles from scratch
-2. Checks `awscli` is installed (installs via brew on macOS if missing)
+2. Checks `awscli` is installed (installs via brew on macOS, or the AWS CLI v2 installer on Linux, if missing)
 3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `nanoc.yaml`
 4. Checks AWS credentials (locally falls back to `aws login`; in CI exits on failure)
 5. Uploads only new/changed files to S3 (SHA256 hash comparison)
@@ -122,8 +122,8 @@ and `release`. Highlights pixel-level differences and flags pages where >1% of p
 ```
 
 **Prerequisites:**
-- Google Chrome must be installed at `/Applications/Google Chrome.app`
-- ImageMagick is auto-installed via Homebrew if missing
+- A Chrome/Chromium browser — on macOS must be installed at `/Applications/Google Chrome.app`; on Linux, auto-installs Chromium if no `google-chrome`/`chromium` binary is found
+- ImageMagick is auto-installed (Homebrew on macOS, your distro's package manager on Linux) if missing
 - `ferrum` gem is auto-added to your `Gemfile` and installed if missing
 
 Pages are discovered automatically from `content/pages/**/*.haml` — no hardcoded list.
@@ -166,7 +166,9 @@ writes each transcript to `content/videos/transcripts/<video-basename>.vtt` —
 flattened by basename regardless of which subfolder the video is in.
 
 **Prerequisites (auto-installed if missing):** `ffmpeg`, `whisper-cli` (via
-`brew install whisper-cpp`), and a `ggml-<model>.bin` file (auto-downloaded to
+`brew install whisper-cpp` on macOS; on Linux, tries your package manager
+first and falls back to building from source if not packaged), and a
+`ggml-<model>.bin` file (auto-downloaded to
 `~/.cache/whisper-models/` on first use).
 
 Skips videos that already have a transcript (idempotent — safe to rerun after
