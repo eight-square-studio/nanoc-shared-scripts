@@ -2,7 +2,15 @@
 
 ## 2026-06-27
 
+- `generate-transcripts.sh` no longer treats silent videos (no audio stream at all) as a failure — probes with `ffprobe` first and skips them the same way as a "no speech detected" clip, instead of letting `ffmpeg` error out trying to extract a non-existent audio stream
 - Move `shared.sh` to `lib/_shared.sh` and update all `source` references in `deploy.sh`, `run.sh`, `check-layouts.sh`, `validate.sh`, and `generate-transcripts.sh`
+- Add Linux support across all local setup paths: `lib/_shared.sh` gains `detect_pkg_manager()`/`pkg_install()` (apt/dnf/pacman/zypper, alongside brew), `port_in_use()`, and `check_for_build_deps()`; `check_os_type()`/`check_for_rbenv()`/`validate_and_install_ruby()` use them on Linux instead of erroring out
+- `deploy.sh` installs AWS CLI v2 on Linux via the official zip installer instead of just printing a manual-install message
+- `check-layouts.sh` installs ImageMagick via the detected package manager and auto-detects/installs a Chrome/Chromium binary on Linux (was hardcoded to `/Applications/Google Chrome.app`); the discovered binary path is passed to Ferrum via `CHROME_PATH`
+- `generate-transcripts.sh` installs `ffmpeg`/`whisper-cli` via the detected package manager on Linux, falling back to building `whisper.cpp` from source when it isn't packaged
+- `run.sh` and `code-server.sh` no longer hard-depend on `lsof` for port checks — fall back to `ss`, then a raw `/dev/tcp` probe
+- `tools/screenshot-compare.rb` opens the HTML report with `xdg-open` on Linux (was `open`-only) and respects `CHROME_PATH` when launching Ferrum
+- Fix bugs found by actually running the Linux setup paths end-to-end in Docker (Ubuntu 24.04 and Fedora): the official rbenv installer's `~/.rbenv/bin` wasn't being added to `PATH` for the current process; `ruby -v` crashed the whole script under `set -e` on a box with no system Ruby at all; `dnf groupinstall "Development Tools"` doesn't exist on dnf5 (replaced with explicit packages); `check_aws_auth` referenced `$AWS_ACCESS_KEY_ID`/`$AWS_SECRET_ACCESS_KEY` unguarded under `set -u`; headless Chrome needs `--no-sandbox`/`--disable-dev-shm-usage` when running as root (containers/CI); Debian/Ubuntu's `chromium`/`chromium-browser` apt packages are non-functional Snap stubs without a running snapd, so `find_browser()` now validates the binary actually runs and falls back to installing Google Chrome (or `snap install chromium`) when it doesn't
 
 ## 2026-06-23
 

@@ -96,7 +96,7 @@ fi
 
 initiate
 if [[ "$WATCH" == true ]]; then
-    while lsof -i :"$PORT" -sTCP:LISTEN &>/dev/null; do
+    while port_in_use "$PORT"; do
         echo -e "${WARN} Port ${PORT} is in use, trying $((PORT + 1))..."
         PORT=$((PORT + 1))
     done
