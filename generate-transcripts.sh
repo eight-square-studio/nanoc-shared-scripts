@@ -205,6 +205,16 @@ function process_video() {
     wav="${workdir}/audio.wav"
     outbase="${workdir}/${name}"
 
+    # Some source videos (e.g. silent screen recordings) have no audio
+    # stream at all — ffmpeg errors trying to extract one ("Output file
+    # does not contain any stream"). That's not a failure, it's the same
+    # "nothing to transcribe" case as whisper detecting no speech below.
+    if ! ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$video" 2>/dev/null | grep -q .; then
+        echo -e "${WARN} No audio stream, skipping transcript: ${name}"
+        SKIPPED_NO_SPEECH=$((SKIPPED_NO_SPEECH + 1))
+        return
+    fi
+
     echo -e "${PASS} Transcribing: ${name}..."
 
     if ! ffmpeg -y -loglevel error -i "$video" -ar 16000 -ac 1 -c:a pcm_s16le "$wav"; then

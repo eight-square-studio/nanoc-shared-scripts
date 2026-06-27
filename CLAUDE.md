@@ -192,10 +192,15 @@ basename-only transcript lookup convention (e.g. `lib/helpers.rb`'s
 
 **Per-video pipeline:**
 1. Skip if a transcript already exists for that basename (unless `--force`).
-2. Extract mono 16kHz WAV via `ffmpeg` (whisper-cli only reads flac/mp3/ogg/wav, not mp4/mov directly).
-3. Transcribe with `whisper-cli -sns -ovtt` (`-sns` suppresses non-speech hallucination tokens like `[Music]`).
-4. Validate the output: strip any stray leading blank line before the `WEBVTT` signature (a malformed leading newline silently breaks every cue in spec-compliant parsers), and require at least one cue. If whisper detected no speech (music-only/visual-only clip), skip writing a file rather than producing an empty transcript — an empty transcript would incorrectly clear the "no audio" muted state consumer projects derive from transcript presence.
-5. Move the validated `.vtt` into `content/videos/transcripts/`.
+2. Probe for an audio stream with `ffprobe`. Silent screen recordings with
+   no audio track at all are skipped immediately (same accounting as the
+   "no speech detected" case below) — without this check, `ffmpeg` errors
+   trying to extract a non-existent audio stream ("Output file does not
+   contain any stream") and the video would be wrongly counted as failed.
+3. Extract mono 16kHz WAV via `ffmpeg` (whisper-cli only reads flac/mp3/ogg/wav, not mp4/mov directly).
+4. Transcribe with `whisper-cli -sns -ovtt` (`-sns` suppresses non-speech hallucination tokens like `[Music]`).
+5. Validate the output: strip any stray leading blank line before the `WEBVTT` signature (a malformed leading newline silently breaks every cue in spec-compliant parsers), and require at least one cue. If whisper detected no speech (music-only clip with an audio track but nothing said), skip writing a file rather than producing an empty transcript — an empty transcript would incorrectly clear the "no audio" muted state consumer projects derive from transcript presence.
+6. Move the validated `.vtt` into `content/videos/transcripts/`.
 
 **Prerequisites (checked and auto-installed where possible):**
 - `ffmpeg` — auto-installed via `pkg_install` (brew on macOS, apt/dnf/pacman/zypper on Linux) if missing
