@@ -1,11 +1,8 @@
 # Changelog
 
-## 2026-06-27 (2)
-
-- `generate-transcripts.sh` no longer treats silent videos (no audio stream at all) as a failure — probes with `ffprobe` first and skips them the same way as a "no speech detected" clip, instead of letting `ffmpeg` error out trying to extract a non-existent audio stream
-
 ## 2026-06-27
 
+- `generate-transcripts.sh` no longer treats silent videos (no audio stream at all) as a failure — probes with `ffprobe` first and skips them the same way as a "no speech detected" clip, instead of letting `ffmpeg` error out trying to extract a non-existent audio stream
 - Move `shared.sh` to `lib/_shared.sh` and update all `source` references in `deploy.sh`, `run.sh`, `check-layouts.sh`, `validate.sh`, and `generate-transcripts.sh`
 - Add Linux support across all local setup paths: `lib/_shared.sh` gains `detect_pkg_manager()`/`pkg_install()` (apt/dnf/pacman/zypper, alongside brew), `port_in_use()`, and `check_for_build_deps()`; `check_os_type()`/`check_for_rbenv()`/`validate_and_install_ruby()` use them on Linux instead of erroring out
 - `deploy.sh` installs AWS CLI v2 on Linux via the official zip installer instead of just printing a manual-install message
