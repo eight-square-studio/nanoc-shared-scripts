@@ -52,14 +52,14 @@ at the project root on success.
 Sets up the environment and compiles the site.
 
 ```bash
-./nanoc-shared-scripts/run.sh                        # watch mode + local server (default)
-./nanoc-shared-scripts/run.sh --no-watch             # one-off compile, then exit
-./nanoc-shared-scripts/run.sh --clean                # wipe output/ before running
-./nanoc-shared-scripts/run.sh --host 0.0.0.0         # listen on all interfaces (LAN/VPN)
-./nanoc-shared-scripts/run.sh --any-ip               # shortcut for --host 0.0.0.0
-./nanoc-shared-scripts/run.sh --port 3003            # use a custom port (default 3000)
-./nanoc-shared-scripts/run.sh -o 0.0.0.0 -p 3003     # combine host + port
-./nanoc-shared-scripts/run.sh --restart-tailscale    # restart Tailscale and exit
+./run.sh                        # watch mode + local server (default)
+./run.sh --no-watch             # one-off compile, then exit
+./run.sh --clean                # wipe output/ before running
+./run.sh --host 0.0.0.0         # listen on all interfaces (LAN/VPN)
+./run.sh --any-ip               # shortcut for --host 0.0.0.0
+./run.sh --port 3003            # use a custom port (default 3000)
+./run.sh -o 0.0.0.0 -p 3003     # combine host + port
+./run.sh --restart-tailscale    # restart Tailscale and exit
 ```
 
 | Flag | Short | Effect |
@@ -96,7 +96,7 @@ Full deploy pipeline. Must be run from the project root (the directory
 containing `nanoc.yaml`).
 
 ```bash
-./nanoc-shared-scripts/deploy.sh
+./deploy.sh
 ```
 
 **What it does:**
@@ -146,11 +146,11 @@ Batch-generates WebVTT (`.vtt`) caption transcripts for a folder of videos, usin
 `whisper.cpp` (local, no API key, nothing leaves the machine).
 
 ```bash
-./nanoc-shared-scripts/generate-transcripts.sh content/videos                # recursively transcribe everything missing a transcript
-./nanoc-shared-scripts/generate-transcripts.sh content/videos/hsbc           # just one subfolder
-./nanoc-shared-scripts/generate-transcripts.sh content/videos --force        # regenerate existing transcripts too
-./nanoc-shared-scripts/generate-transcripts.sh content/videos --model small.en  # bigger/slower model for better accuracy
-./nanoc-shared-scripts/generate-transcripts.sh content/videos --dry-run      # preview what would be processed
+./generate-transcripts.sh content/videos                # recursively transcribe everything missing a transcript
+./generate-transcripts.sh content/videos/hsbc           # just one subfolder
+./generate-transcripts.sh content/videos --force        # regenerate existing transcripts too
+./generate-transcripts.sh content/videos --model small.en  # bigger/slower model for better accuracy
+./generate-transcripts.sh content/videos --dry-run      # preview what would be processed
 ```
 
 | Flag | Effect |
