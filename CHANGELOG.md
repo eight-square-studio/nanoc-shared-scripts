@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-27
+
+- Move `shared.sh` to `lib/_shared.sh` and update all `source` references in `deploy.sh`, `run.sh`, `check-layouts.sh`, `validate.sh`, and `generate-transcripts.sh`
+
 ## 2026-06-23
 
 - Add `validate.sh` check — flags (does not auto-fix) when a consumer project's `lib/helpers.rb` is missing the `require_relative '../nanoc-shared-scripts/lib/shared_helpers'` line, with the exact line to add

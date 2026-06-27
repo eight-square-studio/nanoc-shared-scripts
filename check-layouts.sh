@@ -5,11 +5,11 @@ set -euo pipefail
 # Flags:
 #   --screenshot-only, -s   Screenshot current branch only; skip release comparison
 
-# Resolve symlink to find the real script directory, then source shared.sh
+# Resolve symlink to find the real script directory, then source lib/_shared.sh
 _s="${BASH_SOURCE[0]}"
 while [[ -L "$_s" ]]; do _d="$(cd "$(dirname "$_s")" && pwd)"; _s="$(readlink "$_s")"; [[ "$_s" != /* ]] && _s="$_d/$_s"; done
 SHARED_SCRIPTS_DIR="$(cd "$(dirname "$_s")" && pwd)"
-source "$SHARED_SCRIPTS_DIR/shared.sh"
+source "$SHARED_SCRIPTS_DIR/lib/_shared.sh"
 
 function print_help() {
     echo -e "Usage: ./check-layouts.sh [-h|--help]

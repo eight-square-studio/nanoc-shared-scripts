@@ -3,7 +3,7 @@ set -uo pipefail
 # One-time setup verification for a nanoc project using nanoc-shared-scripts as a submodule.
 # Run from the project root after adding the submodule, or after a significant update.
 # On success: writes .validated to the project root and creates run.sh / deploy.sh symlinks.
-source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/_shared.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PASS_COUNT=0
@@ -96,7 +96,7 @@ else
 fi
 
 # --- Check: shared scripts are executable ---
-for script in deploy.sh run.sh shared.sh validate.sh check-layouts.sh generate-transcripts.sh; do
+for script in deploy.sh run.sh lib/_shared.sh validate.sh check-layouts.sh generate-transcripts.sh; do
     script_path="$SCRIPT_DIR/${script}"
     if [[ -x "$script_path" ]]; then
         check_pass "${script} is executable"

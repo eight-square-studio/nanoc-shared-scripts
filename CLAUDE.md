@@ -14,14 +14,14 @@ Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 ## Repo structure
 
 ```
-shared.sh          # Sourced by other scripts — setup functions, colours, vars
 deploy.sh          # S3 sync, CloudFront invalidation, release tagging
 run.sh             # Watch + serve (default), one-off compile (--no-watch)
-code-server.sh     # Standalone: run code-server with TLS certs (does not source shared.sh)
+code-server.sh     # Standalone: run code-server with TLS certs (does not source lib/_shared.sh)
 validate.sh        # One-time setup check; writes .validated and creates symlinks
 check-layouts.sh   # Visual regression screenshot comparison (current branch vs release)
 generate-transcripts.sh # Batch-generate WebVTT caption transcripts for a folder of videos (whisper.cpp)
 lib/
+  _shared.sh                 # Sourced by other scripts — setup functions, colours, vars
   shared_helpers.rb          # Shared Ruby/nanoc helpers — required from a consumer's lib/helpers.rb
 tools/
   screenshot-compare.rb      # Ruby script called by check-layouts.sh
@@ -37,7 +37,7 @@ README.md
 
 ## Scripts
 
-### shared.sh
+### lib/_shared.sh
 Not called directly — sourced by `deploy.sh`, `run.sh`, `check-layouts.sh`, and `validate.sh`.
 
 Sets `current_dir` to `$PWD` (the calling script's working directory — i.e. the project root).
@@ -79,7 +79,7 @@ With `--restart-tailscale`: restarts Tailscale (`tailscale down` → `tailscale 
 
 ### code-server.sh
 Standalone script to run `code-server` with TLS certs for remote browser access.
-Does **not** source `shared.sh` — defines its own colour constants and exit trap.
+Does **not** source `lib/_shared.sh` — defines its own colour constants and exit trap.
 
 Checks `~/.config/certs/` for a `.crt`/`.key` pair — exits with an error if missing.
 Auto-installs `code-server` via the official install script (`curl -fsSL https://code-server.dev/install.sh | sh`)
@@ -227,7 +227,7 @@ Checks:
 - `lib/helpers.rb` requires `lib/shared_helpers.rb` — greps for `nanoc-shared-scripts/lib/shared_helpers`; fails (not auto-fixed) with the exact `require_relative` line to add if the require is missing, or to create the file with if `lib/helpers.rb` doesn't exist at all
 - `screenshot-overrides.js` present — copies from `templates/screenshot-overrides.js` if missing (existing files left untouched); contains JS injected into each page before screenshotting to freeze animations/transitions; projects can customise their own copy
 - `.github/workflows/deploy.yml` always synced from `templates/deploy.yml` (copied/updated on every run); checks it contains the string `nanoc-shared-scripts` (satisfied by the `bash ./nanoc-shared-scripts/deploy.sh` run step)
-- `deploy.sh`, `run.sh`, `shared.sh`, `validate.sh`, `check-layouts.sh`, `generate-transcripts.sh` are executable
+- `deploy.sh`, `run.sh`, `lib/_shared.sh`, `validate.sh`, `check-layouts.sh`, `generate-transcripts.sh` are executable
 - AWS credentials reachable via `sts get-caller-identity`
 
 On success writes `.validated` to the project root with a timestamp and the
@@ -270,11 +270,11 @@ Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`
 
 - All scripts use `#!/bin/bash` and are macOS-primary (setup checks use `brew`/`rbenv`)
 - CI skips all setup checks when `$CI` env var is set
-- `current_dir` is set to `$PWD` in `shared.sh` — scripts must always be run from the project root
+- `current_dir` is set to `$PWD` in `lib/_shared.sh` — scripts must always be run from the project root
 - Hash commands handle both platforms via `sha256_file()`: `sha256sum` (Linux) and `shasum -a 256` (macOS)
-- `deploy.sh`, `run.sh`, `check-layouts.sh`, and `generate-transcripts.sh` resolve symlinks before sourcing `shared.sh` (they're accessed via symlinks from the project root); `validate.sh` uses the simpler `source "$(dirname "${BASH_SOURCE[0]}")/shared.sh"` since it's always run directly — `shared.sh` must always live in the same directory as the scripts that source it; `code-server.sh` is self-contained (does not source `shared.sh`)
+- `deploy.sh`, `run.sh`, `check-layouts.sh`, and `generate-transcripts.sh` resolve symlinks before sourcing `lib/_shared.sh` (they're accessed via symlinks from the project root); `validate.sh` uses the simpler `source "$(dirname "${BASH_SOURCE[0]}")/lib/_shared.sh"` since it's always run directly — `lib/_shared.sh` must always live at `lib/_shared.sh` relative to the scripts that source it; `code-server.sh` is self-contained (does not source `lib/_shared.sh`)
 - `check-layouts.sh` passes `PROJECT_DIR="$current_dir"` to `tools/screenshot-compare.rb` via env var — the Ruby script uses this to locate consumer project files rather than resolving paths relative to `__dir__`
-- Colour/formatting constants (`PASS`, `FAIL`, etc.) are defined in `shared.sh`
+- Colour/formatting constants (`PASS`, `FAIL`, etc.) are defined in `lib/_shared.sh`
 
 ---
 
