@@ -1,0 +1,21 @@
+# A list of file extensions that Nanoc will consider to be textual rather than
+# binary. If an item with an extension not in this list is found, the file
+# will be considered as binary.
+text_extensions: [ 'css', 'erb', 'haml', 'html', 'js', 'md', 'rb', 'scss', 'tex', 'txt', 'xhtml', 'xml', 'yaml' ]
+
+# Site URL + indexability — drives canonical links, robots.txt and sitemap.xml.
+base_url: https://example.com
+indexable: false
+default_description: ""
+
+# Deployment configuration
+s3_bucket: <S3_BUCKET>
+cloudfront_distribution_id: <DISTRIBUTION_ID>
+aws_region: eu-west-2
+
+prune:
+  auto_prune: true
+
+data_sources:
+  - type: filesystem
+    encoding: utf-8

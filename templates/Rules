@@ -1,0 +1,37 @@
+#!/usr/bin/env ruby
+
+preprocess do
+  @items.delete_if { |item| item[:publish] == false }
+end
+
+compile '/pages/**/*.haml' do
+  filter :haml, format: :html5, escape_html: false
+  layout '/default.*'
+
+  if item.identifier =~ '**/index.*'
+    write item.identifier.without_ext.gsub(/\/pages/,"") + '.html'
+  else
+    write item.identifier.without_ext.gsub(/\/pages/,"") + '/index.html'
+  end
+end
+
+ignore '/**/_*.scss'
+
+compile '/css/**/*.scss' do
+  filter :dart_sass, syntax: :scss
+  write @item.identifier.without_ext + '.css'
+end
+
+compile '/robots.erb' do
+  filter :erb, trim_mode: '-'
+  write '/robots.txt'
+end
+
+compile '/sitemap.erb' do
+  filter :erb, trim_mode: '-'
+  write '/sitemap.xml'
+end
+
+passthrough '/**/*'
+
+layout '/**/*.haml', :haml, escape_html: false
