@@ -24,29 +24,104 @@ echo "=== nanoc-shared-scripts validate ==="
 echo "Project root: $current_dir"
 echo ""
 
-# --- Check: nanoc.yaml exists ---
-if [[ -f "$current_dir/nanoc.yaml" ]]; then
-    check_pass "nanoc.yaml found"
-else
-    check_fail "nanoc.yaml not found — run this script from the project root"
+# --- Bootstrap: use nanoc create-site if core project files are missing ---
+nanoc_needs_bootstrap=false
+for f in nanoc.yaml Rules; do
+    [[ ! -f "$current_dir/$f" ]] && nanoc_needs_bootstrap=true
+done
+
+if [[ "$nanoc_needs_bootstrap" == true ]]; then
+    echo -e "${BLUE}Nanoc project not configured — bootstrapping with nanoc create-site...${NC}"
+    nanoc_tmp="$(mktemp -d)"
+    trap 'rm -rf "$nanoc_tmp"' RETURN
+    if RBENV_VERSION="$default_ruby_version" rbenv exec nanoc create-site "$nanoc_tmp/site" &>/dev/null 2>&1; then
+        check_pass "nanoc create-site succeeded"
+        # nanoc create-site gives us content/ and layouts/ scaffolding;
+        # overlay our templates for nanoc.yaml and Rules (richer defaults
+        # with deployment keys, haml/scss rules, pages routing)
+        if [[ ! -f "$current_dir/nanoc.yaml" ]]; then
+            if [[ -f "$SCRIPT_DIR/templates/nanoc.yaml" ]]; then
+                cp "$SCRIPT_DIR/templates/nanoc.yaml" "$current_dir/nanoc.yaml"
+                check_pass "nanoc.yaml created from project template (with deployment keys)"
+            else
+                cp "$nanoc_tmp/site/nanoc.yaml" "$current_dir/nanoc.yaml"
+                check_pass "nanoc.yaml created via nanoc create-site"
+            fi
+        fi
+        if [[ ! -f "$current_dir/Rules" ]]; then
+            if [[ -f "$SCRIPT_DIR/templates/Rules" ]]; then
+                cp "$SCRIPT_DIR/templates/Rules" "$current_dir/Rules"
+                check_pass "Rules created from project template (haml/scss/pages routing)"
+            else
+                cp "$nanoc_tmp/site/Rules" "$current_dir/Rules"
+                check_pass "Rules created via nanoc create-site"
+            fi
+        fi
+        if [[ ! -d "$current_dir/content" && -d "$nanoc_tmp/site/content" ]]; then
+            cp -r "$nanoc_tmp/site/content" "$current_dir/content"
+            check_pass "content/ created via nanoc create-site"
+        fi
+        if [[ ! -d "$current_dir/layouts" && -d "$nanoc_tmp/site/layouts" ]]; then
+            cp -r "$nanoc_tmp/site/layouts" "$current_dir/layouts"
+            check_pass "layouts/ created via nanoc create-site"
+        fi
+    else
+        echo -e "${WARN} nanoc create-site failed — falling back to templates"
+        for f in nanoc.yaml Rules; do
+            if [[ ! -f "$current_dir/$f" && -f "$SCRIPT_DIR/templates/$f" ]]; then
+                cp "$SCRIPT_DIR/templates/$f" "$current_dir/$f"
+                check_pass "$f created from template (nanoc create-site unavailable)"
+            fi
+        done
+        if [[ ! -d "$current_dir/layouts" ]]; then
+            mkdir -p "$current_dir/layouts"
+            [[ -f "$SCRIPT_DIR/templates/default.haml" ]] && cp "$SCRIPT_DIR/templates/default.haml" "$current_dir/layouts/default.haml"
+            check_pass "layouts/ created from template"
+        fi
+        if [[ ! -d "$current_dir/content" ]]; then
+            mkdir -p "$current_dir/content/pages"
+            [[ -f "$SCRIPT_DIR/templates/index.haml" ]] && cp "$SCRIPT_DIR/templates/index.haml" "$current_dir/content/pages/index.haml"
+            check_pass "content/ created from template"
+        fi
+    fi
+    rm -rf "$nanoc_tmp"
+    echo ""
 fi
 
-# --- Check: nanoc.yaml contains required keys ---
+# --- Augment nanoc.yaml with deployment keys if missing ---
+if [[ -f "$current_dir/nanoc.yaml" ]]; then
+    check_pass "nanoc.yaml found"
+    for key in s3_bucket cloudfront_distribution_id aws_region; do
+        if ! grep -qE "^${key}:" "$current_dir/nanoc.yaml" 2>/dev/null; then
+            case "$key" in
+                s3_bucket)              echo -e "\n${key}: <S3_BUCKET>" >> "$current_dir/nanoc.yaml" ;;
+                cloudfront_distribution_id) echo -e "\n${key}: <DISTRIBUTION_ID>" >> "$current_dir/nanoc.yaml" ;;
+                aws_region)             echo -e "\n${key}: eu-west-2" >> "$current_dir/nanoc.yaml" ;;
+            esac
+            check_pass "nanoc.yaml: added missing key $key (placeholder)"
+        fi
+    done
+else
+    check_fail "nanoc.yaml not found and could not be created"
+fi
+
+# --- Check: nanoc.yaml deployment keys have real values ---
 for key in s3_bucket cloudfront_distribution_id aws_region; do
     value=$(grep -E "^${key}:" "$current_dir/nanoc.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"')
-    if [[ -n "$value" && "$value" != "<DISTRIBUTION_ID>" ]]; then
+    if [[ -n "$value" && "$value" != "<DISTRIBUTION_ID>" && "$value" != "<S3_BUCKET>" ]]; then
         check_pass "nanoc.yaml: $key = $value"
     else
-        check_fail "nanoc.yaml: $key is missing or unset"
+        check_fail "nanoc.yaml: $key is missing or placeholder — edit nanoc.yaml to set it"
     fi
 done
 
-# --- Check: .ruby-version exists ---
+# --- Check: .ruby-version exists; create with default if missing ---
 if [[ -f "$current_dir/.ruby-version" ]]; then
     rv=$(<"$current_dir/.ruby-version")
     check_pass ".ruby-version found ($rv)"
 else
-    check_fail ".ruby-version not found"
+    echo "$default_ruby_version" > "$current_dir/.ruby-version"
+    check_pass ".ruby-version created (${default_ruby_version})"
 fi
 
 # --- Check: Gemfile exists; copy from template if missing ---
@@ -55,6 +130,27 @@ if [[ -f "$current_dir/Gemfile" ]]; then
 else
     cp "$SCRIPT_DIR/templates/Gemfile" "$current_dir/Gemfile"
     check_pass "Gemfile copied from template"
+fi
+
+# --- Check: Rules exists ---
+if [[ -f "$current_dir/Rules" ]]; then
+    check_pass "Rules found"
+else
+    check_fail "Rules not found and could not be created"
+fi
+
+# --- Check: layouts/ exists ---
+if [[ -d "$current_dir/layouts" ]] && ls "$current_dir/layouts"/* &>/dev/null 2>&1; then
+    check_pass "layouts/ has files"
+else
+    check_fail "layouts/ is missing or empty"
+fi
+
+# --- Check: content/ exists ---
+if [[ -d "$current_dir/content" ]] && ls "$current_dir/content"/* &>/dev/null 2>&1; then
+    check_pass "content/ has files"
+else
+    check_fail "content/ is missing or empty"
 fi
 
 # --- Check: lib/helpers.rb requires the shared Ruby helpers ---
@@ -67,7 +163,9 @@ if [[ -f "$helpers_file" ]]; then
         check_fail "lib/helpers.rb does not require shared_helpers.rb — add this line near the top of lib/helpers.rb: ${shared_helpers_require}"
     fi
 else
-    check_fail "lib/helpers.rb not found — create it with at least: ${shared_helpers_require}"
+    mkdir -p "$current_dir/lib"
+    echo "$shared_helpers_require" > "$helpers_file"
+    check_pass "lib/helpers.rb created with shared_helpers require"
 fi
 
 # --- Check: screenshot-overrides.js exists; copy from template if missing ---
@@ -96,7 +194,7 @@ else
 fi
 
 # --- Check: shared scripts are executable ---
-for script in deploy.sh run.sh lib/_shared.sh validate.sh check-layouts.sh generate-transcripts.sh; do
+for script in deploy.sh run.sh setup.sh lib/_shared.sh validate.sh check-layouts.sh generate-transcripts.sh; do
     script_path="$SCRIPT_DIR/${script}"
     if [[ -x "$script_path" ]]; then
         check_pass "${script} is executable"

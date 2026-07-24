@@ -1,0 +1,13 @@
+<!doctype html>
+%html{lang: "en"}
+  %head
+    %title= item[:title] || "Home"
+    %meta{name: "viewport", content: "width=device-width, initial-scale=1.0"}
+    %meta{"http-equiv" => "Content-Type", content: "text/html; charset=UTF-8"}
+    %meta{name: "description", content: item[:description] || @config[:default_description]}
+    %meta{name: "robots", content: (!@config[:indexable] || item[:noindex]) ? "noindex,nofollow" : "index,follow"}
+    - if @config[:base_url] && @config[:indexable] && !item[:noindex]
+      %link{rel: "canonical", href: "#{@config[:base_url]}#{item.path}"}
+    %meta{name: "generator", content: "Nanoc"}
+  %body
+    = yield
