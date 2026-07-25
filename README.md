@@ -96,11 +96,17 @@ Full deploy pipeline. Must be run from the project root (the directory
 containing `nanoc.yaml`).
 
 ```bash
-./deploy.sh
+./deploy.sh                     # full pipeline: compile + deploy
+./deploy.sh --deploy-only       # skip compile, deploy output/ as-is
 ```
 
+| Flag | Effect |
+|------|--------|
+| `--deploy-only` | Skip Ruby setup and nanoc compile — deploy whatever is in `output/`. Useful for CI pipelines that populate `output/` externally (e.g. image generation). Exits with error if `output/` doesn't exist. |
+| `--help` | Show usage |
+
 **What it does:**
-1. Wipes `output/` and recompiles from scratch
+1. Wipes `output/` and recompiles from scratch (skipped with `--deploy-only`)
 2. Checks `awscli` is installed (installs via brew on macOS, or the AWS CLI v2 installer on Linux, if missing)
 3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `nanoc.yaml`
 4. Checks AWS credentials (locally falls back to `aws login`; in CI exits on failure)
