@@ -254,11 +254,11 @@ Checks:
 - `deploy.sh`, `run.sh`, `lib/_shared.sh`, `validate.sh`, `check-layouts.sh`, `generate-transcripts.sh` are executable
 - AWS credentials reachable via `sts get-caller-identity`
 
-On success writes `.validated` to the project root with a timestamp and the
-shared scripts git SHA, creates symlinks `run.sh`, `deploy.sh`, `check-layouts.sh`,
-and `generate-transcripts.sh` at the project root, and adds all five (plus
-`.validated`) to `.gitignore`. All are local machine state only — recreated by
-validate on each machine.
+Symlinks (`run.sh`, `deploy.sh`, `check-layouts.sh`, `generate-transcripts.sh`)
+and `.gitignore` entries are always created regardless of validation outcome, so
+the scripts are usable locally even before all checks pass. The `.validated`
+timestamp file (with shared scripts git SHA) is only written when all checks
+pass. All are local machine state only — recreated by validate on each machine.
 
 ```bash
 bash ./nanoc-shared-scripts/validate.sh

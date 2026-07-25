@@ -39,9 +39,10 @@ bash ./nanoc-shared-scripts/validate.sh
 ```
 
 This checks your `nanoc.yaml` config, `.ruby-version`, GitHub Actions workflow,
-and AWS credentials, then writes a `.validated` timestamp file and creates
-`run.sh`, `deploy.sh`, `check-layouts.sh`, and `generate-transcripts.sh` symlinks
-at the project root on success.
+and AWS credentials. Symlinks (`run.sh`, `deploy.sh`, `check-layouts.sh`,
+`generate-transcripts.sh`) and `.gitignore` entries are always created regardless
+of validation outcome, so the scripts are usable locally even before all checks
+pass. The `.validated` timestamp file is only written when all checks pass.
 
 ---
 

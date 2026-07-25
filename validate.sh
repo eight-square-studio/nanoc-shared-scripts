@@ -210,16 +210,6 @@ else
     check_fail "AWS credentials not reachable — check AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY or run 'aws configure'"
 fi
 
-# --- Summary ---
-echo ""
-echo "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
-echo ""
-
-if [[ $FAIL_COUNT -gt 0 ]]; then
-    echo -e "${FAIL} Validation failed. Fix the issues above and re-run."
-    exit 1
-fi
-
 # --- Ensure local-only files are gitignored ---
 gitignore_file="$current_dir/.gitignore"
 for entry in .validated run.sh deploy.sh check-layouts.sh generate-transcripts.sh; do
@@ -231,17 +221,6 @@ for entry in .validated run.sh deploy.sh check-layouts.sh generate-transcripts.s
         echo -e "${PASS} Added ${entry} to .gitignore"
     fi
 done
-
-# --- Write .validated ---
-shared_sha=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-project_name=$(basename "$current_dir")
-validated_file="$current_dir/.validated"
-{
-    echo "Validated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "Shared scripts ref: $shared_sha"
-    echo "Project: $project_name"
-} > "$validated_file"
-echo -e "${PASS} Written: .validated"
 
 # --- Create symlinks at project root ---
 for script in run.sh deploy.sh check-layouts.sh generate-transcripts.sh; do
@@ -263,6 +242,31 @@ for script in run.sh deploy.sh check-layouts.sh generate-transcripts.sh; do
     ln -s "$target" "$link"
     echo -e "${PASS} Created symlink: ${script} -> ${target}"
 done
+
+# --- Summary ---
+echo ""
+echo "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
+echo ""
+
+if [[ $FAIL_COUNT -gt 0 ]]; then
+    echo -e "${FAIL} Validation failed. Fix the issues above and re-run."
+    echo ""
+    echo "Symlinks and .gitignore were still updated — you can run the scripts locally."
+    echo "If .gitignore was updated, commit it:"
+    echo "  git add .gitignore && git commit -m \"Gitignore local script symlinks and .validated\""
+    exit 1
+fi
+
+# --- Write .validated ---
+shared_sha=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+project_name=$(basename "$current_dir")
+validated_file="$current_dir/.validated"
+{
+    echo "Validated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "Shared scripts ref: $shared_sha"
+    echo "Project: $project_name"
+} > "$validated_file"
+echo -e "${PASS} Written: .validated"
 
 echo ""
 echo -e "${PASS} Validation complete. You can now run:"

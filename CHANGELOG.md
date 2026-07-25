@@ -4,6 +4,7 @@
 
 - `deploy.sh` gains `--deploy-only` flag — skips Ruby setup and nanoc compile, deploys `output/` as-is. Enables CI pipelines that populate `output/` externally (e.g. image generation) to reuse the existing hash-based S3 sync, CloudFront invalidation, and `.deployed` tracking
 - `validate.sh` now bootstraps nanoc projects from scratch — runs `nanoc create-site` for `content/` and `layouts/` scaffolding when core files are missing, overlays project templates for `nanoc.yaml` (deployment keys) and `Rules` (haml/scss/pages routing), creates `.ruby-version` and `lib/helpers.rb` if absent. Falls back to templates if nanoc gem unavailable. Never overwrites existing files
+- `validate.sh` now creates symlinks and `.gitignore` entries regardless of validation outcome — previously these were gated behind all checks passing (`exit 1` before symlink creation), so a missing AWS credential or unset `nanoc.yaml` key meant no `run.sh`/`deploy.sh`/`check-layouts.sh`/`generate-transcripts.sh` symlinks at the project root
 - Add `setup.sh` — standalone environment setup (rbenv, Ruby, bundler) without compile or deploy
 - New templates: `nanoc.yaml`, `Rules`, `default.haml`, `index.haml`
 
