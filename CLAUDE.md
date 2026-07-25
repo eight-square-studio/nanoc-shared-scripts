@@ -107,8 +107,14 @@ bash ./nanoc-shared-scripts/code-server.sh
 Full production deploy pipeline. Must be run from the project root
 (directory containing `nanoc.yaml`) — exits with an error if not.
 
+**Flags:**
+
+| Flag | Behaviour |
+|------|-----------|
+| `--deploy-only` | Skip Ruby setup and nanoc compile — deploy `output/` as-is. Useful for CI pipelines that populate `output/` externally (e.g. card image generation). Exits with error if `output/` doesn't exist. |
+
 **Pipeline:**
-1. Wipes `output/` and recompiles from scratch (`nanoc compile`)
+1. Wipes `output/` and recompiles from scratch (`nanoc compile`) — skipped with `--deploy-only`
 2. Checks `awscli` is installed (installs via brew on macOS, or the official AWS CLI v2 zip installer on Linux, if missing)
 3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `nanoc.yaml`
 4. Checks AWS credentials (`sts get-caller-identity`; locally falls back to `aws login --region`; in CI exits on failure)

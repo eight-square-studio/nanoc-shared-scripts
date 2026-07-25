@@ -242,7 +242,7 @@ function create_release_tag() {
 }
 
 function print_help() {
-    echo -e "Usage: ./deploy.sh [-h|--help]
+    echo -e "Usage: ./deploy.sh [--deploy-only] [-h|--help]
 
 Wipes output/, compiles the site, and deploys to S3 + CloudFront.
 Only uploads new/changed files (hash-based). Deletes removed files from S3.
@@ -252,13 +252,19 @@ Local:  checks/installs awscli, prompts for AWS auth if needed
 CI:     skips local setup, uses AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars
 
 Options:
-  -h, --help   Show this help message"
+  --deploy-only  Skip Ruby setup and nanoc compile — deploy output/ as-is
+  -h, --help     Show this help message"
 }
 
 # --- Main ---
 
+DEPLOY_ONLY=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --deploy-only)
+            DEPLOY_ONLY=true
+            shift
+            ;;
         -h|--help)
             print_help
             exit 0
@@ -271,10 +277,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-rm -rf output/
-
-initiate
-bundle exec nanoc compile
+if [[ "$DEPLOY_ONLY" == false ]]; then
+    rm -rf output/
+    initiate
+    bundle exec nanoc compile
+else
+    if [[ ! -d "output" ]]; then
+        echo -e "${FAIL} --deploy-only requires output/ to exist"
+        exit 1
+    fi
+    echo -e "${PASS} --deploy-only: skipping compile, deploying output/ as-is"
+fi
 
 check_for_awscli
 read_deploy_config
