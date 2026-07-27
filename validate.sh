@@ -210,13 +210,32 @@ else
     check_fail "AWS credentials not reachable — check AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY or run 'aws configure'"
 fi
 
-# --- Ensure local-only files are gitignored ---
+# --- Ensure nanoc build artifacts are gitignored ---
 gitignore_file="$current_dir/.gitignore"
+nanoc_section_needed=false
+for entry in "output/*" "*.log"; do
+    grep -q "^${entry}$" "$gitignore_file" 2>/dev/null || nanoc_section_needed=true
+done
+if [[ "$nanoc_section_needed" == true ]]; then
+    nanoc_header="## Nanoc specific files ##"
+    if ! grep -qF "$nanoc_header" "$gitignore_file" 2>/dev/null; then
+        printf "\n%s\n" "$nanoc_header" >> "$gitignore_file"
+    fi
+fi
+for entry in "output/*" "*.log"; do
+    if grep -q "^${entry}$" "$gitignore_file" 2>/dev/null; then
+        echo -e "${PASS} .gitignore already ignores ${entry}"
+    else
+        printf "%s\n" "$entry" >> "$gitignore_file"
+        echo -e "${PASS} Added ${entry} to .gitignore"
+    fi
+done
+
+# --- Ensure local-only files are gitignored ---
 for entry in .validated run.sh deploy.sh check-layouts.sh generate-transcripts.sh; do
     if grep -q "^${entry}$" "$gitignore_file" 2>/dev/null; then
         echo -e "${PASS} .gitignore already ignores ${entry}"
     else
-        # printf ensures a newline before the entry even if the file lacks a trailing newline
         printf "\n%s\n" "$entry" >> "$gitignore_file"
         echo -e "${PASS} Added ${entry} to .gitignore"
     fi

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-27
+
+- `validate.sh` ensures nanoc build artifacts (`output/*`, `*.log`) are gitignored under a `## Nanoc specific files ##` header — adds any missing entries without duplicating existing ones
+
 ## 2026-07-25
 
 - `deploy.sh` gains `--deploy-only` flag — skips Ruby setup and nanoc compile, deploys `output/` as-is. Enables CI pipelines that populate `output/` externally (e.g. image generation) to reuse the existing hash-based S3 sync, CloudFront invalidation, and `.deployed` tracking

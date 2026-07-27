@@ -42,7 +42,8 @@ This checks your `nanoc.yaml` config, `.ruby-version`, GitHub Actions workflow,
 and AWS credentials. Symlinks (`run.sh`, `deploy.sh`, `check-layouts.sh`,
 `generate-transcripts.sh`) and `.gitignore` entries are always created regardless
 of validation outcome, so the scripts are usable locally even before all checks
-pass. The `.validated` timestamp file is only written when all checks pass.
+pass. Also ensures nanoc build artifacts (`output/*`, `*.log`) are gitignored.
+The `.validated` timestamp file is only written when all checks pass.
 
 ---
 
