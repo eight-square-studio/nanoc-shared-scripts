@@ -23,6 +23,7 @@ Use --no-watch to do a one-off compile with no file watching or server.
 Options:
   -c, --clean            Remove output/ before running
   -n, --no-watch         Compile once only (no watch, no serve)
+  -k, --kill             Kill any existing nanoc webrick processes on specified port (default: 3000)
   -o, --host HOST        Bind the server to HOST (default: 127.0.0.1)
   -i, --any-ip           Use 0.0.0.0 to listen on all interfaces
   -p, --port PORT        Listen on PORT (default: 3000)
@@ -56,6 +57,11 @@ while [[ $# -gt 0 ]]; do
         -p|--port)
             PORT="$2"
             shift 2
+            ;;
+        -k|--kill)
+            echo -e "${PASS} Killing nanoc webrick on port ${PORT} processes..."
+            (lsof -ti:$PORT) && kill -9 $(lsof -ti:$PORT)
+            shift
             ;;
         --restart-tailscale)
             RESTART_TAILSCALE=true
