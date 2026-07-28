@@ -71,10 +71,11 @@ short-circuits when `$CI` is set).
 Sets up the environment then compiles the site.
 
 ```
-Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-o|--host HOST] [-i|--any-ip] [-p|--port PORT] [--restart-tailscale] [-h|--help]
+Usage: ./run.sh [-c|--clean] [-n|--no-watch] [-k|--kill] [-o|--host HOST] [-i|--any-ip] [-p|--port PORT] [--restart-tailscale] [-h|--help]
 
   -c, --clean            Remove output/ before running
   -n, --no-watch         Compile once only (no watch, no serve)
+  -k, --kill             Kill any existing nanoc webrick processes on specified port (default: 3000)
   -o, --host HOST        Bind the server to HOST (default: 127.0.0.1)
   -i, --any-ip           Use 0.0.0.0 to listen on all interfaces
   -p, --port PORT        Listen on PORT (default: 3000)
@@ -280,9 +281,8 @@ Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_REGION`
-- `GH_PAT` — personal access token with `repo` scope, used by `actions/checkout` to pull the private submodule
 
-**What it does:** checkout (full history + recursive submodules, authenticated via `GH_PAT`) → Ruby setup → `bundle install`
+**What it does:** checkout (full history + recursive submodules) → Ruby setup → `bundle install`
 → nanoc version check → git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` (with `CI=true`)
 → merge `release` → `main`
 

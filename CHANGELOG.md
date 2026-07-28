@@ -1,11 +1,16 @@
 # Changelog
 
+## 2026-07-28
+
+- `run.sh` gains `-k` / `--kill` flag — kills any existing process on the specified port (default 3000) before starting, useful when a previous nanoc/webrick process is blocking the port
+
 ## 2026-07-27
 
 - `validate.sh` ensures nanoc build artifacts (`output/*`, `*.log`) are gitignored under a `## Nanoc specific files ##` header — adds any missing entries without duplicating existing ones
 
 ## 2026-07-25
 
+- Remove `GH_PAT` secret from `templates/deploy.yml` — no longer needed now that the repo is open-source; submodule checkout works without authentication
 - `deploy.sh` gains `--deploy-only` flag — skips Ruby setup and nanoc compile, deploys `output/` as-is. Enables CI pipelines that populate `output/` externally (e.g. image generation) to reuse the existing hash-based S3 sync, CloudFront invalidation, and `.deployed` tracking
 - `validate.sh` now bootstraps nanoc projects from scratch — runs `nanoc create-site` for `content/` and `layouts/` scaffolding when core files are missing, overlays project templates for `nanoc.yaml` (deployment keys) and `Rules` (haml/scss/pages routing), creates `.ruby-version` and `lib/helpers.rb` if absent. Falls back to templates if nanoc gem unavailable. Never overwrites existing files
 - `validate.sh` now creates symlinks and `.gitignore` entries regardless of validation outcome — previously these were gated behind all checks passing (`exit 1` before symlink creation), so a missing AWS credential or unset `nanoc.yaml` key meant no `run.sh`/`deploy.sh`/`check-layouts.sh`/`generate-transcripts.sh` symlinks at the project root

@@ -59,7 +59,9 @@ Sets up the environment and compiles the site.
 ./run.sh --clean                # wipe output/ before running
 ./run.sh --host 0.0.0.0         # listen on all interfaces (LAN/VPN)
 ./run.sh --any-ip               # shortcut for --host 0.0.0.0
+./run.sh --kill                 # kill existing process on port 3000
 ./run.sh --port 3003            # use a custom port (default 3000)
+./run.sh -k -p 3003             # kill existing process on port 3003
 ./run.sh -o 0.0.0.0 -p 3003     # combine host + port
 ./run.sh --restart-tailscale    # restart Tailscale and exit
 ```
@@ -68,6 +70,7 @@ Sets up the environment and compiles the site.
 |------|-------|--------|
 | `--clean` | `-c` | Remove `output/` before running |
 | `--no-watch` | `-n` | Compile once only, no file watching, no server |
+| `--kill` | `-k` | Kill any existing process on the specified port (default: `3000`) before starting |
 | `--host HOST` | `-o` | Bind the server to HOST (default: `127.0.0.1`) |
 | `--any-ip` | `-i` | Use `0.0.0.0` to listen on all interfaces (useful for accessing the site from other devices on your network or over a Tailscale VPN) |
 | `--port PORT` | `-p` | Listen on PORT (default: `3000`) |
@@ -259,7 +262,7 @@ steps directly and does not call back into this repo.
 - `push` to the `release` branch — primary trigger for production deploys
 - `workflow_call` — can be invoked from another workflow in your project if needed
 
-**What it does:** checkout (full history + recursive submodules, authenticated via `GH_PAT`) → Ruby setup →
+**What it does:** checkout (full history + recursive submodules) → Ruby setup →
 `bundle install` → nanoc version check → git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` (with `CI=true`) →
 merge `release` back into `main`
 
@@ -272,26 +275,6 @@ Set these in GitHub repo Settings → Secrets and variables → Actions:
 | `AWS_ACCESS_KEY_ID` | IAM access key with S3 + CloudFront permissions |
 | `AWS_SECRET_ACCESS_KEY` | Corresponding secret key |
 | `AWS_REGION` | e.g. `eu-west-1` |
-| `GH_PAT` | Personal access token (see instructions below) |
-
-### GH_PAT setup
-
-`GH_PAT` is required — the workflow uses it to authenticate the submodule checkout.
-Without it the action will fail with "repository not found".
-
-1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)** https://github.com/settings/tokens
-2. Click **Generate new token (classic)**
-3. Give it a descriptive name, e.g. `my-project CI`
-4. Set an expiry (90 days recommended — rotate when it expires)
-5. Tick **`repo`** scope (grants full repo access including private repos)
-6. Click **Generate token** and copy it immediately
-
-Then add it to your consumer repo:
-
-1. Go to the repo on GitHub → **Settings → Secrets and variables → Actions**
-2. Click **New repository secret**
-3. Name: `GH_PAT`, Value: paste the token
-4. Click **Add secret**
 
 ### Actions permissions
 
