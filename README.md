@@ -125,12 +125,14 @@ containing `nanoc.yaml`).
 9. Creates and pushes a sequential release tag (`YYYY-MM-DD-NN`)
 
 **Staging pipeline (`./deploy.sh --staging`):**
-1. Wipes `output/` and recompiles from scratch (skipped with `--deploy-only`)
-2. Checks `awscli` is installed
-3. Reads config from the `staging:` block in `nanoc.yaml`
-4. Checks AWS credentials
-5. Full sync to S3 (`aws s3 sync --delete`)
-6. Invalidates all CloudFront paths (`/*`)
+1. Overlays non-deploy keys from `staging:` block (e.g. `base_url`, `indexable`) onto `nanoc.yaml` for compile
+2. Wipes `output/` and recompiles from scratch (skipped with `--deploy-only`)
+3. Restores `nanoc.yaml` to original
+4. Checks `awscli` is installed
+5. Reads deploy config from the `staging:` block in `nanoc.yaml`
+6. Checks AWS credentials
+7. Full sync to S3 (`aws s3 sync --delete`)
+8. Invalidates all CloudFront paths (`/*`)
 
 **nanoc.yaml deploy config:**
 

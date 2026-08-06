@@ -42,6 +42,40 @@ function check_for_awscli(){
     fi
 }
 
+function apply_staging_nanoc_config() {
+    local config_file="$current_dir/nanoc.yaml"
+    local staging_block
+    staging_block=$(awk '/^staging:/{found=1; next} found && /^[^ ]/{exit} found' "$config_file")
+    [[ -z "$staging_block" ]] && return 0
+
+    local nanoc_overrides
+    nanoc_overrides=$(echo "$staging_block" | grep -vE '^\s*(s3_bucket|cloudfront_distribution_id|aws_region|#):' | grep -v '^\s*$')
+    [[ -z "$nanoc_overrides" ]] && return 0
+
+    cp "$config_file" "${config_file}.pre-staging"
+    while IFS= read -r line; do
+        local key trimmed
+        key=$(echo "$line" | awk -F: '{print $1}' | tr -d ' ')
+        trimmed=$(echo "$line" | sed 's/^  //')
+        if grep -qE "^${key}:" "$config_file"; then
+            sed -i.bak "s|^${key}:.*|${trimmed}|" "$config_file" && rm -f "${config_file}.bak"
+            echo -e "${PASS} Staging override: ${trimmed}"
+        else
+            echo "" >> "$config_file"
+            echo "$trimmed" >> "$config_file"
+            echo -e "${PASS} Staging override (added): ${trimmed}"
+        fi
+    done <<< "$nanoc_overrides"
+}
+
+function restore_nanoc_config() {
+    local config_file="$current_dir/nanoc.yaml"
+    if [[ -f "${config_file}.pre-staging" ]]; then
+        mv "${config_file}.pre-staging" "$config_file"
+        echo -e "${PASS} Restored nanoc.yaml"
+    fi
+}
+
 function read_deploy_config() {
     local config_file="$current_dir/nanoc.yaml"
     local env_label="production"
@@ -306,8 +340,10 @@ done
 
 if [[ "$DEPLOY_ONLY" == false ]]; then
     rm -rf output/
+    [[ "$STAGING" == true ]] && apply_staging_nanoc_config
     initiate
-    bundle exec nanoc compile
+    bundle exec nanoc compile || { [[ "$STAGING" == true ]] && restore_nanoc_config; exit 1; }
+    [[ "$STAGING" == true ]] && restore_nanoc_config
 else
     if [[ ! -d "output" ]]; then
         echo -e "${FAIL} --deploy-only requires output/ to exist"

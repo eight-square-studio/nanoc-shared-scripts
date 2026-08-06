@@ -4,6 +4,7 @@
 
 - `deploy.sh` gains `--staging` flag — deploys to a staging environment using config from the `staging:` block in `nanoc.yaml`. Uses `aws s3 sync --delete` (full sync) instead of hash-based uploads. Invalidates all CloudFront paths (`/*`). Skips `.deployed` hash tracking, release commit, and release tagging
 - `deploy.sh` production config now also supports a `production:` nested block in `nanoc.yaml` (tried first, falls back to top-level keys for backward compatibility)
+- `deploy.sh` staging deploys overlay non-deploy keys (e.g. `base_url`, `indexable`) from the `staging:` block onto `nanoc.yaml` before compile, restoring the original after — nanoc sees staging values at compile time without permanent file changes
 - `templates/deploy.yml` now triggers on `push` to `staging` branch (in addition to `release`). Automatically passes `--staging` to `deploy.sh` when running on the staging branch. Skips the merge-back-to-main step for staging deploys
 
 ## 2026-07-28

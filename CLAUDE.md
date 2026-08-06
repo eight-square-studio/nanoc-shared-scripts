@@ -128,12 +128,14 @@ Full deploy pipeline. Must be run from the project root
 10. Creates a sequential release tag (`YYYY-MM-DD-NN`) and pushes
 
 **Staging pipeline (`--staging`):**
-1. Wipes `output/` and recompiles — skipped with `--deploy-only`
-2. Checks `awscli`
-3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `staging:` block in `nanoc.yaml`
-4. Checks AWS credentials
-5. Full sync to S3 (`aws s3 sync --delete`)
-6. Invalidates all CloudFront paths (`/*`)
+1. Overlays non-deploy keys from `staging:` block (e.g. `base_url`, `indexable`) onto `nanoc.yaml` — backup taken, restored after compile even on failure
+2. Wipes `output/` and recompiles — skipped with `--deploy-only`
+3. Restores `nanoc.yaml` to original
+4. Checks `awscli`
+5. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `staging:` block in `nanoc.yaml`
+6. Checks AWS credentials
+7. Full sync to S3 (`aws s3 sync --delete`)
+8. Invalidates all CloudFront paths (`/*`)
 
 **nanoc.yaml config:** production reads from `production:` block if present, falls back to top-level keys (backward-compatible). Staging always requires a `staging:` block:
 
