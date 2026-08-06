@@ -9,6 +9,11 @@ Consumed by nanoc project repos via git submodule at `nanoc-shared-scripts/`.
 > - `CHANGELOG.md` — add an entry under today's date (group with existing entries if the date already exists)
 > - `CLAUDE.md` — only if implementation internals, gotchas, or conventions change (not for user-facing behaviour already covered by README)
 
+**Development environment:** local work is done on macOS; CI deploys run on
+Linux (`ubuntu-latest`). All scripts must work on both — macOS uses Homebrew,
+Linux uses the distro package manager (apt/dnf/pacman/zypper) via `pkg_install()`.
+CI skips all local setup (`$CI` short-circuits `initiate()`).
+
 See `README.md` for usage examples, flag tables, pipeline steps, nanoc.yaml
 config formats, GitHub Actions setup, secrets, and consumer project setup/update
 instructions. This file covers implementation details and gotchas relevant when
