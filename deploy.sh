@@ -8,6 +8,7 @@ set -euo pipefail
 _s="${BASH_SOURCE[0]}"
 while [[ -L "$_s" ]]; do _d="$(cd "$(dirname "$_s")" && pwd)"; _s="$(readlink "$_s")"; [[ "$_s" != /* ]] && _s="$_d/$_s"; done
 source "$(cd "$(dirname "$_s")" && pwd)/lib/_shared.sh"
+source "$(cd "$(dirname "$_s")" && pwd)/lib/deploy_helpers.sh"
 
 if [[ ! -f "nanoc.yaml" ]]; then
     echo "Error: must be run from the project root (nanoc.yaml not found)"
@@ -74,42 +75,6 @@ function restore_nanoc_config() {
         mv "${config_file}.pre-staging" "$config_file"
         echo -e "${PASS} Restored nanoc.yaml"
     fi
-}
-
-function read_deploy_config() {
-    local config_file="$current_dir/nanoc.yaml"
-    local env_label="production"
-    local block_name="production"
-    if [[ "$STAGING" == true ]]; then
-        env_label="staging"
-        block_name="staging"
-    fi
-
-    local env_block
-    env_block=$(awk "/^${block_name}:/{found=1; next} found && /^[^ ]/{exit} found" "$config_file")
-
-    if [[ -n "$env_block" ]]; then
-        S3_BUCKET=$(echo "$env_block" | grep 's3_bucket:' | awk '{print $2}' | tr -d '"')
-        CF_DIST_ID=$(echo "$env_block" | grep 'cloudfront_distribution_id:' | awk '{print $2}' | tr -d '"')
-        AWS_REGION=$(echo "$env_block" | grep 'aws_region:' | awk '{print $2}' | tr -d '"')
-    elif [[ "$STAGING" == true ]]; then
-        echo -e "${FAIL} No staging: block found in nanoc.yaml"
-        exit 5
-    else
-        S3_BUCKET=$(grep -E '^s3_bucket:' "$config_file" | awk '{print $2}' | tr -d '"')
-        CF_DIST_ID=$(grep -E '^cloudfront_distribution_id:' "$config_file" | awk '{print $2}' | tr -d '"')
-        AWS_REGION=$(grep -E '^aws_region:' "$config_file" | awk '{print $2}' | tr -d '"')
-    fi
-
-    if [[ -z "$S3_BUCKET" ]]; then
-        echo -e "${FAIL} s3_bucket not set in nanoc.yaml (under ${block_name}:)"
-        exit 5
-    fi
-    if [[ -z "$CF_DIST_ID" || "$CF_DIST_ID" == "<DISTRIBUTION_ID>" ]]; then
-        echo -e "${FAIL} cloudfront_distribution_id not set in nanoc.yaml (under ${block_name}:) — please replace <DISTRIBUTION_ID>"
-        exit 5
-    fi
-    echo -e "${PASS} [${env_label}] ${AWS_REGION} Deploy target: s3://${S3_BUCKET}  CF: ${CF_DIST_ID}"
 }
 
 function check_aws_auth() {
