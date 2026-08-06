@@ -6,6 +6,7 @@
 - `deploy.sh` production config now also supports a `production:` nested block in `nanoc.yaml` (tried first, falls back to top-level keys for backward compatibility)
 - `deploy.sh` staging deploys overlay non-deploy keys (e.g. `base_url`, `indexable`) from the `staging:` block onto `nanoc.yaml` before compile, restoring the original after — nanoc sees staging values at compile time without permanent file changes
 - `validate.sh` now supports both nanoc.yaml config formats — reads deploy keys from `production:` block if present, falls back to top-level keys. Reports staging block presence (warns if missing). Placeholder augmentation only applies to top-level format
+- `templates/deploy.yml` now reads `aws_region` from nanoc.yaml (per-environment block with top-level fallback) instead of requiring an `AWS_REGION` secret. `AWS_REGION` secret is now optional and used as a fallback only
 - `templates/deploy.yml` now triggers on `push` to `staging` branch (in addition to `release`). Automatically passes `--staging` to `deploy.sh` when running on the staging branch. Skips the merge-back-to-main step for staging deploys
 
 ## 2026-07-28
