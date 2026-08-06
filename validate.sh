@@ -91,29 +91,59 @@ fi
 # --- Augment nanoc.yaml with deployment keys if missing ---
 if [[ -f "$current_dir/nanoc.yaml" ]]; then
     check_pass "nanoc.yaml found"
-    for key in s3_bucket cloudfront_distribution_id aws_region; do
-        if ! grep -qE "^${key}:" "$current_dir/nanoc.yaml" 2>/dev/null; then
-            case "$key" in
-                s3_bucket)              echo -e "\n${key}: <S3_BUCKET>" >> "$current_dir/nanoc.yaml" ;;
-                cloudfront_distribution_id) echo -e "\n${key}: <DISTRIBUTION_ID>" >> "$current_dir/nanoc.yaml" ;;
-                aws_region)             echo -e "\n${key}: eu-west-2" >> "$current_dir/nanoc.yaml" ;;
-            esac
-            check_pass "nanoc.yaml: added missing key $key (placeholder)"
-        fi
-    done
 else
     check_fail "nanoc.yaml not found and could not be created"
 fi
 
-# --- Check: nanoc.yaml deployment keys have real values ---
-for key in s3_bucket cloudfront_distribution_id aws_region; do
-    value=$(grep -E "^${key}:" "$current_dir/nanoc.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"')
-    if [[ -n "$value" && "$value" != "<DISTRIBUTION_ID>" && "$value" != "<S3_BUCKET>" ]]; then
-        check_pass "nanoc.yaml: $key = $value"
+# --- Helper: read a deploy key from nanoc.yaml (production: block or top-level) ---
+function read_deploy_key() {
+    local key="$1"
+    local config_file="$current_dir/nanoc.yaml"
+    local prod_block
+    prod_block=$(awk '/^production:/{found=1; next} found && /^[^ ]/{exit} found' "$config_file")
+    if [[ -n "$prod_block" ]]; then
+        echo "$prod_block" | grep "${key}:" | awk '{print $2}' | tr -d '"'
     else
-        check_fail "nanoc.yaml: $key is missing or placeholder — edit nanoc.yaml to set it"
+        grep -E "^${key}:" "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"'
     fi
-done
+}
+
+# --- Check: nanoc.yaml has production deployment keys (top-level or under production:) ---
+if [[ -f "$current_dir/nanoc.yaml" ]]; then
+    prod_block=$(awk '/^production:/{found=1; next} found && /^[^ ]/{exit} found' "$current_dir/nanoc.yaml")
+    if [[ -n "$prod_block" ]]; then
+        deploy_format="production:"
+    else
+        deploy_format="top-level"
+    fi
+
+    for key in s3_bucket cloudfront_distribution_id aws_region; do
+        value=$(read_deploy_key "$key")
+        if [[ -n "$value" && "$value" != "<DISTRIBUTION_ID>" && "$value" != "<S3_BUCKET>" ]]; then
+            check_pass "nanoc.yaml [${deploy_format}]: $key = $value"
+        elif [[ -z "$value" ]]; then
+            # Add placeholder — at top level if no production: block, inside production: block if it exists
+            if [[ "$deploy_format" == "top-level" ]]; then
+                case "$key" in
+                    s3_bucket)              echo -e "\n${key}: <S3_BUCKET>" >> "$current_dir/nanoc.yaml" ;;
+                    cloudfront_distribution_id) echo -e "\n${key}: <DISTRIBUTION_ID>" >> "$current_dir/nanoc.yaml" ;;
+                    aws_region)             echo -e "\n${key}: eu-west-2" >> "$current_dir/nanoc.yaml" ;;
+                esac
+            fi
+            check_fail "nanoc.yaml [${deploy_format}]: $key is missing or placeholder — edit nanoc.yaml to set it"
+        else
+            check_fail "nanoc.yaml [${deploy_format}]: $key is placeholder — edit nanoc.yaml to set it"
+        fi
+    done
+
+    # --- Check: staging config (optional, just report presence) ---
+    staging_block=$(awk '/^staging:/{found=1; next} found && /^[^ ]/{exit} found' "$current_dir/nanoc.yaml")
+    if [[ -n "$staging_block" ]]; then
+        check_pass "nanoc.yaml: staging: block found"
+    else
+        echo -e "${WARN} nanoc.yaml: no staging: block — staging deploys won't work until one is added"
+    fi
+fi
 
 # --- Check: .ruby-version exists; create with default if missing ---
 if [[ -f "$current_dir/.ruby-version" ]]; then
