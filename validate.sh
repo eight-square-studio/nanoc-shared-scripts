@@ -244,7 +244,7 @@ fi
 gitignore_file="$current_dir/.gitignore"
 nanoc_section_needed=false
 for entry in "output/*" "*.log"; do
-    grep -q "^${entry}$" "$gitignore_file" 2>/dev/null || nanoc_section_needed=true
+    grep -qFx "$entry" "$gitignore_file" 2>/dev/null || nanoc_section_needed=true
 done
 if [[ "$nanoc_section_needed" == true ]]; then
     nanoc_header="## Nanoc specific files ##"
@@ -253,7 +253,7 @@ if [[ "$nanoc_section_needed" == true ]]; then
     fi
 fi
 for entry in "output/*" "*.log"; do
-    if grep -q "^${entry}$" "$gitignore_file" 2>/dev/null; then
+    if grep -qFx "$entry" "$gitignore_file" 2>/dev/null; then
         echo -e "${PASS} .gitignore already ignores ${entry}"
     else
         printf "%s\n" "$entry" >> "$gitignore_file"
@@ -263,7 +263,7 @@ done
 
 # --- Ensure local-only files are gitignored ---
 for entry in .validated run.sh deploy.sh check-layouts.sh generate-transcripts.sh; do
-    if grep -q "^${entry}$" "$gitignore_file" 2>/dev/null; then
+    if grep -qFx "$entry" "$gitignore_file" 2>/dev/null; then
         echo -e "${PASS} .gitignore already ignores ${entry}"
     else
         printf "\n%s\n" "$entry" >> "$gitignore_file"
