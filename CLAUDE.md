@@ -105,7 +105,7 @@ bash ./nanoc-shared-scripts/code-server.sh
 ```
 
 ### deploy.sh
-Full production deploy pipeline. Must be run from the project root
+Full deploy pipeline. Must be run from the project root
 (directory containing `nanoc.yaml`) — exits with an error if not.
 
 **Flags:**
@@ -113,8 +113,9 @@ Full production deploy pipeline. Must be run from the project root
 | Flag | Behaviour |
 |------|-----------|
 | `--deploy-only` | Skip Ruby setup and nanoc compile — deploy `output/` as-is. Useful for CI pipelines that populate `output/` externally (e.g. card image generation). Exits with error if `output/` doesn't exist. |
+| `--staging` | Deploy to staging environment. Reads config from `staging:` block in `nanoc.yaml`. Uses `aws s3 sync --delete` (full sync). Invalidates all CloudFront paths (`/*`). Skips `.deployed` hash tracking, release commit, and release tagging. |
 
-**Pipeline:**
+**Production pipeline (default):**
 1. Wipes `output/` and recompiles from scratch (`nanoc compile`) — skipped with `--deploy-only`
 2. Checks `awscli` is installed (installs via brew on macOS, or the official AWS CLI v2 zip installer on Linux, if missing)
 3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `nanoc.yaml`
@@ -126,11 +127,34 @@ Full production deploy pipeline. Must be run from the project root
 9. Saves updated hashes to `.deployed` and commits it as `*** Release YYYY-MM-DD ***`
 10. Creates a sequential release tag (`YYYY-MM-DD-NN`) and pushes
 
+**Staging pipeline (`--staging`):**
+1. Wipes `output/` and recompiles — skipped with `--deploy-only`
+2. Checks `awscli`
+3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `staging:` block in `nanoc.yaml`
+4. Checks AWS credentials
+5. Full sync to S3 (`aws s3 sync --delete`)
+6. Invalidates all CloudFront paths (`/*`)
+
+**nanoc.yaml config:** production reads from `production:` block if present, falls back to top-level keys (backward-compatible). Staging always requires a `staging:` block:
+
+```yaml
+# Either top-level keys (original) or nested under production:
+production:
+  s3_bucket: "my-prod-bucket"
+  cloudfront_distribution_id: "EXXXPROD"
+  aws_region: "eu-west-2"
+
+staging:
+  s3_bucket: "my-staging-bucket"
+  cloudfront_distribution_id: "EXXXSTAGING"
+  aws_region: "eu-west-2"
+```
+
 **Dependencies on the consumer project (must exist in CWD):**
-- `nanoc.yaml` — deploy config (`s3_bucket`, `cloudfront_distribution_id`, `aws_region`)
+- `nanoc.yaml` — deploy config (top-level or `production:`/`staging:` blocks with `s3_bucket`, `cloudfront_distribution_id`, `aws_region`)
 - `.ruby-version` — Ruby version for rbenv
 - `output/` — built by nanoc compile step
-- `.deployed` — created on first deploy, committed thereafter
+- `.deployed` — created on first deploy, committed thereafter (production only)
 
 ### check-layouts.sh
 Visual regression screenshot comparison between the current branch and `release`.
@@ -274,7 +298,8 @@ bash ./nanoc-shared-scripts/validate.sh
 Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`.
 
 **Triggers:**
-- `push` to `release` branch — primary trigger for production deploys
+- `push` to `release` branch — production deploy
+- `push` to `staging` branch — staging deploy (passes `--staging` to `deploy.sh`)
 - `workflow_call` — can also be called as a reusable workflow from another workflow
 
 **Secrets required:**
@@ -283,8 +308,8 @@ Copied into consumer projects at `.github/workflows/deploy.yml` by `validate.sh`
 - `AWS_REGION`
 
 **What it does:** checkout (full history + recursive submodules) → Ruby setup → `bundle install`
-→ nanoc version check → git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` (with `CI=true`)
-→ merge `release` → `main`
+→ nanoc version check → git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` (with `CI=true`; `--staging` added automatically on staging branch)
+→ merge `release` → `main` (production only — skipped for staging)
 
 **Permissions:** `contents: write` at workflow level (to push `.deployed` commit, release tags, and the merge back to `main`).
 

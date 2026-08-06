@@ -43,19 +43,39 @@ function check_for_awscli(){
 }
 
 function read_deploy_config() {
-    # Read S3 bucket and CloudFront distribution ID from nanoc.yaml
-    S3_BUCKET=$(grep -E '^s3_bucket:' "$current_dir/nanoc.yaml" | awk '{print $2}' | tr -d '"')
-    CF_DIST_ID=$(grep -E '^cloudfront_distribution_id:' "$current_dir/nanoc.yaml" | awk '{print $2}' | tr -d '"')
-    AWS_REGION=$(grep -E '^aws_region:' "$current_dir/nanoc.yaml" | awk '{print $2}' | tr -d '"')
+    local config_file="$current_dir/nanoc.yaml"
+    local env_label="production"
+    local block_name="production"
+    if [[ "$STAGING" == true ]]; then
+        env_label="staging"
+        block_name="staging"
+    fi
+
+    local env_block
+    env_block=$(awk "/^${block_name}:/{found=1; next} found && /^[^ ]/{exit} found" "$config_file")
+
+    if [[ -n "$env_block" ]]; then
+        S3_BUCKET=$(echo "$env_block" | grep 's3_bucket:' | awk '{print $2}' | tr -d '"')
+        CF_DIST_ID=$(echo "$env_block" | grep 'cloudfront_distribution_id:' | awk '{print $2}' | tr -d '"')
+        AWS_REGION=$(echo "$env_block" | grep 'aws_region:' | awk '{print $2}' | tr -d '"')
+    elif [[ "$STAGING" == true ]]; then
+        echo -e "${FAIL} No staging: block found in nanoc.yaml"
+        exit 5
+    else
+        S3_BUCKET=$(grep -E '^s3_bucket:' "$config_file" | awk '{print $2}' | tr -d '"')
+        CF_DIST_ID=$(grep -E '^cloudfront_distribution_id:' "$config_file" | awk '{print $2}' | tr -d '"')
+        AWS_REGION=$(grep -E '^aws_region:' "$config_file" | awk '{print $2}' | tr -d '"')
+    fi
+
     if [[ -z "$S3_BUCKET" ]]; then
-        echo -e "${FAIL} s3_bucket not set in nanoc.yaml"
+        echo -e "${FAIL} s3_bucket not set in nanoc.yaml (under ${block_name}:)"
         exit 5
     fi
     if [[ -z "$CF_DIST_ID" || "$CF_DIST_ID" == "<DISTRIBUTION_ID>" ]]; then
-        echo -e "${FAIL} cloudfront_distribution_id not set in nanoc.yaml — please replace <DISTRIBUTION_ID>"
+        echo -e "${FAIL} cloudfront_distribution_id not set in nanoc.yaml (under ${block_name}:) — please replace <DISTRIBUTION_ID>"
         exit 5
     fi
-    echo -e "${PASS} ${AWS_REGION} Deploy target: s3://${S3_BUCKET}  CF: ${CF_DIST_ID}"
+    echo -e "${PASS} [${env_label}] ${AWS_REGION} Deploy target: s3://${S3_BUCKET}  CF: ${CF_DIST_ID}"
 }
 
 function check_aws_auth() {
@@ -242,7 +262,7 @@ function create_release_tag() {
 }
 
 function print_help() {
-    echo -e "Usage: ./deploy.sh [--deploy-only] [-h|--help]
+    echo -e "Usage: ./deploy.sh [--deploy-only] [--staging] [-h|--help]
 
 Wipes output/, compiles the site, and deploys to S3 + CloudFront.
 Only uploads new/changed files (hash-based). Deletes removed files from S3.
@@ -253,16 +273,23 @@ CI:     skips local setup, uses AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env va
 
 Options:
   --deploy-only  Skip Ruby setup and nanoc compile — deploy output/ as-is
+  --staging      Deploy to staging environment (reads staging config from nanoc.yaml,
+                 uses s3 sync, skips hash tracking / .deployed commit / release tag)
   -h, --help     Show this help message"
 }
 
 # --- Main ---
 
 DEPLOY_ONLY=false
+STAGING=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --deploy-only)
             DEPLOY_ONLY=true
+            shift
+            ;;
+        --staging)
+            STAGING=true
             shift
             ;;
         -h|--help)
@@ -293,23 +320,34 @@ check_for_awscli
 read_deploy_config
 check_aws_auth
 
-echo -e "${PASS} Deploying to s3://${S3_BUCKET}/ (hash-based)..."
-CHANGED_FILES=$(deploy_with_hash_check "$S3_BUCKET")
-DELETED_FILES=$(delete_removed_files "$S3_BUCKET")
-ALL_AFFECTED=$(printf '%s\n' $CHANGED_FILES $DELETED_FILES | grep -v '^$')
-
-if [[ -n "$ALL_AFFECTED" ]]; then
-    echo -e "${PASS} Invalidating affected files on CloudFront distribution ${CF_DIST_ID}..."
-    CF_QUANTITY=$(echo "$ALL_AFFECTED" | wc -l | tr -d ' ')
-    CF_ITEMS=$(echo "$ALL_AFFECTED" | sed 's|^|"/|' | sed 's|$|"|' | tr '\n' ',' | sed 's/,$//')
+if [[ "$STAGING" == true ]]; then
+    echo -e "${PASS} Deploying to s3://${S3_BUCKET}/ (staging — full sync)..."
+    aws s3 sync "${current_dir}/output/" "s3://${S3_BUCKET}/" --delete
+    echo -e "${PASS} Invalidating all paths on CloudFront distribution ${CF_DIST_ID}..."
     aws cloudfront create-invalidation \
         --distribution-id "$CF_DIST_ID" \
-        --invalidation-batch "{\"Paths\":{\"Quantity\":${CF_QUANTITY},\"Items\":[${CF_ITEMS}]},\"CallerReference\":\"$(date +%s)\"}" \
+        --invalidation-batch "{\"Paths\":{\"Quantity\":1,\"Items\":[\"/*\"]},\"CallerReference\":\"$(date +%s)\"}" \
         --no-cli-pager
-    save_deployment_hashes
-    commit_deployed_file
-    create_release_tag
+    echo -e "${PASS} Staging deploy complete"
 else
-    echo -e "${PASS} No files changed — nothing to deploy"
-    save_deployment_hashes
+    echo -e "${PASS} Deploying to s3://${S3_BUCKET}/ (hash-based)..."
+    CHANGED_FILES=$(deploy_with_hash_check "$S3_BUCKET")
+    DELETED_FILES=$(delete_removed_files "$S3_BUCKET")
+    ALL_AFFECTED=$(printf '%s\n' $CHANGED_FILES $DELETED_FILES | grep -v '^$')
+
+    if [[ -n "$ALL_AFFECTED" ]]; then
+        echo -e "${PASS} Invalidating affected files on CloudFront distribution ${CF_DIST_ID}..."
+        CF_QUANTITY=$(echo "$ALL_AFFECTED" | wc -l | tr -d ' ')
+        CF_ITEMS=$(echo "$ALL_AFFECTED" | sed 's|^|"/|' | sed 's|$|"|' | tr '\n' ',' | sed 's/,$//')
+        aws cloudfront create-invalidation \
+            --distribution-id "$CF_DIST_ID" \
+            --invalidation-batch "{\"Paths\":{\"Quantity\":${CF_QUANTITY},\"Items\":[${CF_ITEMS}]},\"CallerReference\":\"$(date +%s)\"}" \
+            --no-cli-pager
+        save_deployment_hashes
+        commit_deployed_file
+        create_release_tag
+    else
+        echo -e "${PASS} No files changed — nothing to deploy"
+        save_deployment_hashes
+    fi
 fi

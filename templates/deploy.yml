@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - release
+      - staging
     paths-ignore:
       - '.deployed'
   workflow_call:
@@ -45,10 +46,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Build and deploy
-        run: bash ./nanoc-shared-scripts/deploy.sh
+        run: |
+          DEPLOY_FLAGS=""
+          if [[ "${{ github.ref_name }}" == "staging" ]]; then
+            DEPLOY_FLAGS="--staging"
+          fi
+          bash ./nanoc-shared-scripts/deploy.sh $DEPLOY_FLAGS
         env:
           CI: true
       - name: Merge release back into main
+        if: github.ref_name == 'release'
         run: |
           git checkout main
           git pull origin main

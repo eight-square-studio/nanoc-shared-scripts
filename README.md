@@ -103,14 +103,17 @@ containing `nanoc.yaml`).
 ```bash
 ./deploy.sh                     # full pipeline: compile + deploy
 ./deploy.sh --deploy-only       # skip compile, deploy output/ as-is
+./deploy.sh --staging           # deploy to staging environment
+./deploy.sh --staging --deploy-only  # staging deploy, skip compile
 ```
 
 | Flag | Effect |
 |------|--------|
 | `--deploy-only` | Skip Ruby setup and nanoc compile — deploy whatever is in `output/`. Useful for CI pipelines that populate `output/` externally (e.g. image generation). Exits with error if `output/` doesn't exist. |
+| `--staging` | Deploy to staging environment. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from the `staging:` block in `nanoc.yaml`. Uses `aws s3 sync --delete` (full sync) instead of hash-based uploads. Invalidates all CloudFront paths (`/*`). Skips `.deployed` hash tracking, commit, and release tagging. |
 | `--help` | Show usage |
 
-**What it does:**
+**Production pipeline (`./deploy.sh`):**
 1. Wipes `output/` and recompiles from scratch (skipped with `--deploy-only`)
 2. Checks `awscli` is installed (installs via brew on macOS, or the AWS CLI v2 installer on Linux, if missing)
 3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `nanoc.yaml`
@@ -120,6 +123,46 @@ containing `nanoc.yaml`).
 7. Invalidates only the changed paths on CloudFront
 8. Commits `.deployed` as `*** Release YYYY-MM-DD ***`
 9. Creates and pushes a sequential release tag (`YYYY-MM-DD-NN`)
+
+**Staging pipeline (`./deploy.sh --staging`):**
+1. Wipes `output/` and recompiles from scratch (skipped with `--deploy-only`)
+2. Checks `awscli` is installed
+3. Reads config from the `staging:` block in `nanoc.yaml`
+4. Checks AWS credentials
+5. Full sync to S3 (`aws s3 sync --delete`)
+6. Invalidates all CloudFront paths (`/*`)
+
+**nanoc.yaml deploy config:**
+
+Two formats are supported. Top-level keys (original format) continue to work:
+
+```yaml
+# Production keys at top level (backward-compatible)
+s3_bucket: "my-prod-bucket"
+cloudfront_distribution_id: "EXXXPROD"
+aws_region: "eu-west-2"
+
+staging:
+  s3_bucket: "my-staging-bucket"
+  cloudfront_distribution_id: "EXXXSTAGING"
+  aws_region: "eu-west-2"
+```
+
+Or nest both under named blocks:
+
+```yaml
+production:
+  s3_bucket: "my-prod-bucket"
+  cloudfront_distribution_id: "EXXXPROD"
+  aws_region: "eu-west-2"
+
+staging:
+  s3_bucket: "my-staging-bucket"
+  cloudfront_distribution_id: "EXXXSTAGING"
+  aws_region: "eu-west-2"
+```
+
+Production reads from `production:` block if present, falls back to top-level keys. Staging always requires a `staging:` block.
 
 ### check-layouts.sh — visual regression comparison
 
@@ -259,12 +302,13 @@ silently become private too.
 steps directly and does not call back into this repo.
 
 **Triggers:**
-- `push` to the `release` branch — primary trigger for production deploys
+- `push` to the `release` branch — production deploy
+- `push` to the `staging` branch — staging deploy (passes `--staging` to `deploy.sh`)
 - `workflow_call` — can be invoked from another workflow in your project if needed
 
 **What it does:** checkout (full history + recursive submodules) → Ruby setup →
-`bundle install` → nanoc version check → git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` (with `CI=true`) →
-merge `release` back into `main`
+`bundle install` → nanoc version check → git identity → AWS credentials → `bash ./nanoc-shared-scripts/deploy.sh` (with `CI=true`; `--staging` flag added automatically on the `staging` branch) →
+merge `release` back into `main` (production only — skipped for staging)
 
 ### Secrets required
 
