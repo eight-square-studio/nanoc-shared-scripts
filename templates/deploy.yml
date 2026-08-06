@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - release
+      - staging
     paths-ignore:
       - '.deployed'
   workflow_call:
@@ -13,7 +14,7 @@ on:
       AWS_SECRET_ACCESS_KEY:
         required: true
       AWS_REGION:
-        required: true
+        required: false
 
 permissions:
   contents: write
@@ -38,17 +39,36 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Read AWS region from nanoc.yaml
+        id: config
+        run: |
+          if [[ "${{ github.ref_name }}" == "staging" ]]; then
+            BLOCK="staging"
+          else
+            BLOCK="production"
+          fi
+          REGION=$(awk "/^${BLOCK}:/{found=1; next} found && /^[^ ]/{exit} found" nanoc.yaml | grep 'aws_region:' | awk '{print $2}' | tr -d '"')
+          if [[ -z "$REGION" ]]; then
+            REGION=$(grep -E '^aws_region:' nanoc.yaml | awk '{print $2}' | tr -d '"')
+          fi
+          echo "aws_region=${REGION}" >> "$GITHUB_OUTPUT"
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ steps.config.outputs.aws_region || secrets.AWS_REGION }}
       - name: Build and deploy
-        run: bash ./nanoc-shared-scripts/deploy.sh
+        run: |
+          DEPLOY_FLAGS=""
+          if [[ "${{ github.ref_name }}" == "staging" ]]; then
+            DEPLOY_FLAGS="--staging"
+          fi
+          bash ./nanoc-shared-scripts/deploy.sh $DEPLOY_FLAGS
         env:
           CI: true
       - name: Merge release back into main
+        if: github.ref_name == 'release'
         run: |
           git checkout main
           git pull origin main
