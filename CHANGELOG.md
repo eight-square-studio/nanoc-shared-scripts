@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-07
+
+- `deploy.sh` config parsing (`read_deploy_config`) and `set_s3_content_type` moved into new `lib/deploy_helpers.sh` — no behaviour change, groundwork for a future standalone content-type-fix script to reuse them without pulling in the rest of `deploy.sh`
+
 ## 2026-08-06
 
 - `deploy.sh` gains `--staging` flag — deploys to a staging environment using config from the `staging:` block in `nanoc.yaml`. Uses `aws s3 sync --delete` (full sync) instead of hash-based uploads. Invalidates all CloudFront paths (`/*`). Skips `.deployed` hash tracking, release commit, and release tagging

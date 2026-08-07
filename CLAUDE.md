@@ -32,6 +32,7 @@ check-layouts.sh   # Visual regression screenshot comparison (current branch vs 
 generate-transcripts.sh # Batch-generate WebVTT caption transcripts for a folder of videos (whisper.cpp)
 lib/
   _shared.sh                 # Sourced by other scripts — setup functions, colours, vars
+  deploy_helpers.sh          # Sourced by deploy.sh (and future standalone scripts) — config parsing, S3 content-type helper
   shared_helpers.rb          # Shared Ruby/nanoc helpers — required from a consumer's lib/helpers.rb
 tools/
   screenshot-compare.rb      # Ruby script called by check-layouts.sh
@@ -70,9 +71,17 @@ All scripts must be run from the project root; `deploy.sh` and `run.sh` enforce 
 | `check_for_nanoc()` | Validates nanoc is available |
 | `initiate()` | Runs all of the above in sequence; skipped entirely if `$CI` is set |
 
+### lib/deploy_helpers.sh internals
+
+Sourced by `deploy.sh` (both `read_deploy_config()` and `set_s3_content_type()`
+were pulled out of `deploy.sh` so a future standalone `fix-content-type.sh`
+script can reuse them without pulling in the rest of `deploy.sh`). Relies on
+`current_dir`, `AWS_REGION`, `STAGING`, and the `PASS`/`FAIL` colour constants
+from `lib/_shared.sh` — must be sourced after it.
+
 ### deploy.sh internals
 
-**Config parsing:** `read_deploy_config()` uses `awk` to extract indented lines
+**Config parsing:** `read_deploy_config()` (in `lib/deploy_helpers.sh`) uses `awk` to extract indented lines
 under `production:` or `staging:` blocks. For production, tries the `production:`
 block first, falls back to top-level keys. For staging, requires a `staging:` block.
 
