@@ -5,7 +5,7 @@ function read_deploy_config() {
     local config_file="$current_dir/nanoc.yaml"
     local env_label="production"
     local block_name="production"
-    if [[ "$STAGING" == true ]]; then
+    if [[ "${STAGING:-false}" == true ]]; then
         env_label="staging"
         block_name="staging"
     fi
@@ -17,7 +17,7 @@ function read_deploy_config() {
         S3_BUCKET=$(echo "$env_block" | grep 's3_bucket:' | awk '{print $2}' | tr -d '"')
         CF_DIST_ID=$(echo "$env_block" | grep 'cloudfront_distribution_id:' | awk '{print $2}' | tr -d '"')
         AWS_REGION=$(echo "$env_block" | grep 'aws_region:' | awk '{print $2}' | tr -d '"')
-    elif [[ "$STAGING" == true ]]; then
+    elif [[ "${STAGING:-false}" == true ]]; then
         echo -e "${FAIL} No staging: block found in nanoc.yaml"
         exit 5
     else
