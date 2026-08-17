@@ -155,12 +155,19 @@ function check_os_type(){
     if [[ "$OSTYPE" == "darwin"* ]]; then
         echo -e "${PASS} Running on Mac OS system"
         if ! command -v brew &> /dev/null; then
-            read -p "Homebrew commandline is not installed. Would you like it installed (Y/n)?" install_brew
-            if [ "$install_brew" != "${install_brew#[Yy]}" ]; then
-                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            # Check if stdin is a TTY (interactive terminal)
+            if [[ -t 0 ]]; then
+                read -p "Homebrew commandline is not installed. Would you like it installed (Y/n)?" install_brew
+                if [ "$install_brew" != "${install_brew#[Yy]}" ]; then
+                    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+                else
+                    echo -e "${FAIL} Exiting Homebrew needs to be installed"
+                    exit 1
+                fi
             else
-                echo -e "${FAIL} Exiting Homebrew needs to be installed"
-                exit 1
+                # Non-interactive: auto-install
+                echo -e "${WARN} Homebrew not installed (non-interactive mode). Installing..."
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
             fi
         else
             echo -e "${PASS} brew is installed"
@@ -177,24 +184,34 @@ function check_os_type(){
 
 function check_for_rbenv(){
     if ! command -v rbenv &> /dev/null; then
-        read -p "rbenv commandline is not installed. Would you like it installed (Y/n)?" install_rbenv
-        if [[ "$install_rbenv" != "${install_rbenv#[Yy]}" ]]; then
+        # Check if stdin is a TTY (interactive terminal)
+        if [[ -t 0 ]]; then
+            read -p "rbenv commandline is not installed. Would you like it installed (Y/n)?" install_rbenv
+            if [[ "$install_rbenv" != "${install_rbenv#[Yy]}" ]]; then
+                if [[ "$OSTYPE" == "darwin"* ]]; then
+                    brew install rbenv
+                else
+                    curl -fsSL https://rbenv.org/install.sh | bash
+                    export PATH="$HOME/.rbenv/bin:$PATH"
+                fi
+                rbenv_init_path
+                rbenv init - bash > /dev/null 2>&1 || true
+            else
+                echo -e "${FAIL} Exiting rbenv needs to be installed. Read more at https://rbenv.org/"
+                echo -e "${FAIL} Or use command: ${WHITE}curl -fsSL https://rbenv.org/install.sh | bash${NC}"
+                exit 2
+            fi
+        else
+            # Non-interactive: auto-install
+            echo -e "${WARN} rbenv not installed (non-interactive mode). Installing..."
             if [[ "$OSTYPE" == "darwin"* ]]; then
                 brew install rbenv
             else
                 curl -fsSL https://rbenv.org/install.sh | bash
-                # The official installer only wires ~/.rbenv/bin into
-                # .bash_profile for *future* shells — add it now so the
-                # rest of this script (and rbenv_init_path below, which
-                # itself shells out to `rbenv root`) can find it.
                 export PATH="$HOME/.rbenv/bin:$PATH"
             fi
             rbenv_init_path
             rbenv init - bash > /dev/null 2>&1 || true
-        else
-            echo -e "${FAIL} Exiting rbenv needs to be installed. Read more at https://rbenv.org/"
-            echo -e "${FAIL} Or use command: ${WHITE}curl -fsSL https://rbenv.org/install.sh | bash${NC}"
-            exit 2
         fi
     else
         echo -e "${PASS} rbenv is installed"
@@ -203,16 +220,17 @@ function check_for_rbenv(){
 }
 
 function validate_and_install_ruby(){
-    # `ruby` may not exist on PATH at all yet (e.g. a fresh Linux box with
-    # no system Ruby) — macOS always ships one, which previously masked
-    # this. Treat "not found" the same as "wrong version" rather than
-    # letting the bare `ruby -v` call crash the script under set -e.
-    ruby_value="$(ruby -v 2>/dev/null || true)"
-    if [[ "${ruby_value}" == *"${ruby_version}"* ]]; then
+    # Check if rbenv has the required version installed
+    # Use rbenv versions instead of checking system ruby, since we're in a rbenv-managed environment
+    if rbenv versions | grep -q "^\s*${ruby_version}\s*$"; then
         echo -e "${PASS} ruby ${ruby_version} is installed"
     else
+        echo -e "${WARN} ruby ${ruby_version} is not installed with rbenv — installing..."
         check_for_build_deps
-        [[ -d ~/.rbenv/plugins/ruby-build ]] && (cd ~/.rbenv/plugins/ruby-build && git pull)
+        # Try to update ruby-build plugin if it exists; ignore permission errors
+        if [[ -d ~/.rbenv/plugins/ruby-build ]]; then
+            (cd ~/.rbenv/plugins/ruby-build && git pull 2>/dev/null) || true
+        fi
         rbenv install --skip-existing $ruby_version
         rbenv rehash
     fi

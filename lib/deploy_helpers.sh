@@ -1,5 +1,5 @@
 #!/bin/bash
-# Common deployment helper functions for deploy.sh and fix-content-type.sh
+# Common deployment helper functions for deploy.sh, fix-content-type.sh, and other deployment scripts
 
 function read_deploy_config() {
     local config_file="$current_dir/nanoc.yaml"
