@@ -115,7 +115,7 @@ function generate_file_hashes() {
         echo ""
         return
     fi
-    find "$output_dir" -type f ! -path '*/.*' -print0 \
+    find "$output_dir" -type f ! -name '.*' -print0 \
         | while IFS= read -r -d '' file; do sha256_file "$file"; done \
         | sed "s|  ${output_dir}/|  |" \
         | LC_ALL=C sort
@@ -153,7 +153,7 @@ function get_changed_files() {
     trap 'rm -f "$temp_file" "$current_hashes" "$previous_hashes"' RETURN
     if [[ ! -f "$deployed_file" ]]; then
         echo -e "${WARN} No previous deployment found. All files will be uploaded." >&2
-        find "$output_dir" -type f ! -path '*/.*' | sed "s|^$output_dir/||" | sort > "$temp_file"
+        find "$output_dir" -type f ! -name '.*' | sed "s|^$output_dir/||" | sort > "$temp_file"
         cat "$temp_file"
         return 0
     fi
