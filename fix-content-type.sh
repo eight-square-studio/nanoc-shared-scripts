@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+# Resolve symlinks to find the real script directory
+_s="${BASH_SOURCE[0]}"
+while [[ -L "$_s" ]]; do _d="$(cd "$(dirname "$_s")" && pwd)"; _s="$(readlink "$_s")"; [[ "$_s" != /* ]] && _s="$_d/$_s"; done
+SCRIPT_DIR="$(cd "$(dirname "$_s")" && pwd)"
 source "${SCRIPT_DIR}/lib/_shared.sh"
 source "${SCRIPT_DIR}/lib/deploy_helpers.sh"
 
@@ -115,7 +117,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ! -f "${SCRIPT_DIR}/nanoc.yaml" ]]; then
+if [[ ! -f "nanoc.yaml" ]]; then
   echo "Error: nanoc.yaml not found. Run from the project root."
   exit 1
 fi
