@@ -208,19 +208,19 @@ fi
 
 # --- Check: .github/workflows/deploy.yml exists; copy/update from template ---
 workflow_file="$current_dir/.github/workflows/deploy.yml"
-workflow_diff_record="$current_dir/.deploy-yml-diff-ok"
+deploy_yml_diff_accepted=""
 mkdir -p "$current_dir/.github/workflows"
 if [[ ! -f "$workflow_file" ]]; then
     cp "$SCRIPT_DIR/templates/deploy.yml" "$workflow_file"
-    rm -f "$workflow_diff_record"
     check_pass ".github/workflows/deploy.yml copied from template"
 elif diff -q "$workflow_file" "$SCRIPT_DIR/templates/deploy.yml" &>/dev/null; then
-    rm -f "$workflow_diff_record"
     check_pass ".github/workflows/deploy.yml is up to date"
 else
     diff_hash=$(diff -u "$workflow_file" "$SCRIPT_DIR/templates/deploy.yml" | \
         if command -v sha256sum &>/dev/null; then sha256sum; else shasum -a 256; fi | awk '{print $1}')
-    if [[ -f "$workflow_diff_record" ]] && [[ "$(cat "$workflow_diff_record")" == "$diff_hash" ]]; then
+    saved_hash=$(sed -n 's/^deploy-yml-diff-ok: //p' "$current_dir/.validated" 2>/dev/null || true)
+    if [[ "$saved_hash" == "$diff_hash" ]]; then
+        deploy_yml_diff_accepted="$diff_hash"
         check_pass ".github/workflows/deploy.yml differs from template (previously accepted)"
     else
         echo ""
@@ -232,10 +232,9 @@ else
         read -rp "Overwrite .github/workflows/deploy.yml with template? [y/N] " answer
         if [[ "$answer" =~ ^[Yy]$ ]]; then
             cp "$SCRIPT_DIR/templates/deploy.yml" "$workflow_file"
-            rm -f "$workflow_diff_record"
             check_pass ".github/workflows/deploy.yml updated from template"
         else
-            echo "$diff_hash" > "$workflow_diff_record"
+            deploy_yml_diff_accepted="$diff_hash"
             check_pass ".github/workflows/deploy.yml differs from template (accepted)"
         fi
     fi
@@ -287,7 +286,7 @@ for entry in "output/*" "*.log"; do
 done
 
 # --- Ensure local-only files are gitignored ---
-for entry in .validated .deploy-yml-diff-ok run.sh deploy.sh check-layouts.sh generate-transcripts.sh; do
+for entry in .validated run.sh deploy.sh check-layouts.sh generate-transcripts.sh; do
     if grep -qFx "$entry" "$gitignore_file" 2>/dev/null; then
         echo -e "${PASS} .gitignore already ignores ${entry}"
     else
@@ -339,6 +338,9 @@ validated_file="$current_dir/.validated"
     echo "Validated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "Shared scripts ref: $shared_sha"
     echo "Project: $project_name"
+    if [[ -n "$deploy_yml_diff_accepted" ]]; then
+        echo "deploy-yml-diff-ok: $deploy_yml_diff_accepted"
+    fi
 } > "$validated_file"
 echo -e "${PASS} Written: .validated"
 

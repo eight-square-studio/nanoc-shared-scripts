@@ -2,7 +2,7 @@
 
 ## 2026-08-22
 
-- `validate.sh` now shows a diff and prompts before overwriting `.github/workflows/deploy.yml` when it differs from the template — previously it silently overwrote. Declining records a hash of the diff in `.deploy-yml-diff-ok` so subsequent runs pass silently until either file changes. The record is cleared automatically when an update is accepted or the files come back into sync
+- `validate.sh` now shows a diff and prompts before overwriting `.github/workflows/deploy.yml` when it differs from the template — previously it silently overwrote. Declining records a hash of the diff in `.validated` so subsequent runs pass silently until either file changes. The record is cleared automatically when an update is accepted or the files come back into sync
 
 ## 2026-08-07
 

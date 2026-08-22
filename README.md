@@ -250,9 +250,9 @@ needed.
 
 When `.github/workflows/deploy.yml` differs from the template, `validate.sh`
 shows a unified diff and asks before overwriting. Declining records the diff
-hash in `.deploy-yml-diff-ok` — subsequent runs with the same diff pass
-silently. The record is cleared automatically when you accept an update or the
-files come back into sync.
+hash in `.validated` — subsequent runs with the same diff pass silently. The
+record is cleared automatically when you accept an update or the files come
+back into sync.
 
 Writes `.validated` to the project root on success. Creates `run.sh`,
 `deploy.sh`, `check-layouts.sh`, and `generate-transcripts.sh` symlinks and
