@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-22
+
+- `validate.sh` now shows a diff and prompts before overwriting `.github/workflows/deploy.yml` when it differs from the template — previously it silently overwrote. Declining records a hash of the diff in `.deploy-yml-diff-ok` so subsequent runs pass silently until either file changes. The record is cleared automatically when an update is accepted or the files come back into sync
+
 ## 2026-08-07
 
 - Fix `deploy.sh` hash-based sync (`generate_file_hashes`, `get_changed_files`) excluding files under dot-prefixed directories (`find ... ! -path '*/.*'`) — this silently dropped anything under `.well-known/` (e.g. `apple-app-site-association`) from every deploy, so the file was never uploaded to S3 and the CI content-type-fix step failed self-copying a nonexistent key. Switched to `! -name '.*'`, which excludes dotfiles by their own name (e.g. `.DS_Store`) without excluding files nested inside dot-directories

@@ -246,7 +246,15 @@ if it's missing or the file doesn't exist (see Ruby helpers above); this isn't
 auto-fixed since it'd mean injecting a line into a file you own. Copies
 `templates/screenshot-overrides.js` if missing — this JS is injected into
 pages before screenshotting to freeze animations; customise per-project as
-needed. Writes `.validated` to the project root on success. Creates `run.sh`,
+needed.
+
+When `.github/workflows/deploy.yml` differs from the template, `validate.sh`
+shows a unified diff and asks before overwriting. Declining records the diff
+hash in `.deploy-yml-diff-ok` — subsequent runs with the same diff pass
+silently. The record is cleared automatically when you accept an update or the
+files come back into sync.
+
+Writes `.validated` to the project root on success. Creates `run.sh`,
 `deploy.sh`, `check-layouts.sh`, and `generate-transcripts.sh` symlinks and
 adds all five (plus `.validated`) to `.gitignore` — local machine state only,
 not committed.

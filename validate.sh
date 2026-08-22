@@ -287,7 +287,7 @@ for entry in "output/*" "*.log"; do
 done
 
 # --- Ensure local-only files are gitignored ---
-for entry in .validated run.sh deploy.sh check-layouts.sh generate-transcripts.sh; do
+for entry in .validated .deploy-yml-diff-ok run.sh deploy.sh check-layouts.sh generate-transcripts.sh; do
     if grep -qFx "$entry" "$gitignore_file" 2>/dev/null; then
         echo -e "${PASS} .gitignore already ignores ${entry}"
     else
