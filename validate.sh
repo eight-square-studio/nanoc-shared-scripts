@@ -208,12 +208,37 @@ fi
 
 # --- Check: .github/workflows/deploy.yml exists; copy/update from template ---
 workflow_file="$current_dir/.github/workflows/deploy.yml"
+workflow_diff_record="$current_dir/.deploy-yml-diff-ok"
 mkdir -p "$current_dir/.github/workflows"
-if [[ -f "$workflow_file" ]] && diff -q "$workflow_file" "$SCRIPT_DIR/templates/deploy.yml" &>/dev/null; then
+if [[ ! -f "$workflow_file" ]]; then
+    cp "$SCRIPT_DIR/templates/deploy.yml" "$workflow_file"
+    rm -f "$workflow_diff_record"
+    check_pass ".github/workflows/deploy.yml copied from template"
+elif diff -q "$workflow_file" "$SCRIPT_DIR/templates/deploy.yml" &>/dev/null; then
+    rm -f "$workflow_diff_record"
     check_pass ".github/workflows/deploy.yml is up to date"
 else
-    cp "$SCRIPT_DIR/templates/deploy.yml" "$workflow_file"
-    check_pass ".github/workflows/deploy.yml updated from template"
+    diff_hash=$(diff -u "$workflow_file" "$SCRIPT_DIR/templates/deploy.yml" | \
+        if command -v sha256sum &>/dev/null; then sha256sum; else shasum -a 256; fi | awk '{print $1}')
+    if [[ -f "$workflow_diff_record" ]] && [[ "$(cat "$workflow_diff_record")" == "$diff_hash" ]]; then
+        check_pass ".github/workflows/deploy.yml differs from template (previously accepted)"
+    else
+        echo ""
+        echo -e "${YELLOW}deploy.yml differs from template:${NC}"
+        echo ""
+        diff --color=always -u "$workflow_file" "$SCRIPT_DIR/templates/deploy.yml" 2>/dev/null || \
+            diff -u "$workflow_file" "$SCRIPT_DIR/templates/deploy.yml"
+        echo ""
+        read -rp "Overwrite .github/workflows/deploy.yml with template? [y/N] " answer
+        if [[ "$answer" =~ ^[Yy]$ ]]; then
+            cp "$SCRIPT_DIR/templates/deploy.yml" "$workflow_file"
+            rm -f "$workflow_diff_record"
+            check_pass ".github/workflows/deploy.yml updated from template"
+        else
+            echo "$diff_hash" > "$workflow_diff_record"
+            check_pass ".github/workflows/deploy.yml differs from template (accepted)"
+        fi
+    fi
 fi
 
 # --- Check: deploy.yml calls the shared reusable workflow ---
