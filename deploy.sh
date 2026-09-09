@@ -323,7 +323,7 @@ check_aws_auth
 
 if [[ "$STAGING" == true ]]; then
     echo -e "${PASS} Deploying to s3://${S3_BUCKET}/ (staging — full sync)..."
-    local exclude_args=""
+    exclude_args=""
     if [[ -n "${S3_SYNC_EXCLUDES:-}" ]]; then
         while IFS= read -r pattern; do
             [[ -n "$pattern" ]] && exclude_args+=" --exclude ${pattern}"

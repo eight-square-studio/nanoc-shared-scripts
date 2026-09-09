@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-09
+
+- Fix `deploy.sh` staging deploy crashing with `local: can only be used in a function` — `exclude_args` (added for `S3_SYNC_EXCLUDES`) was declared `local` at top-level script scope, not inside a function
+
 ## 2026-08-22
 
 - `validate.sh` now shows a diff and prompts before overwriting `.github/workflows/deploy.yml` when it differs from the template — previously it silently overwrote. Declining records a hash of the diff in `.validated` so subsequent runs pass silently until either file changes. The record is cleared automatically when an update is accepted or the files come back into sync
