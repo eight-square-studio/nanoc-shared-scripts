@@ -3,7 +3,7 @@
 # Must be run from the project root (directory containing nanoc.yaml)
 
 current_dir="$(pwd)"
-default_ruby_version="3.4.7"
+default_ruby_version="4.0.7"
 ruby_version=""
 
 # Colours
