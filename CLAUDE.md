@@ -58,7 +58,7 @@ All scripts must be run from the project root; `deploy.sh` and `run.sh` enforce 
 | Function | Purpose |
 |----------|---------|
 | `sha256_file()` | Cross-platform SHA256: `sha256sum` (Linux) or `shasum -a 256` (macOS) |
-| `get_ruby_version()` | Reads `.ruby-version` from CWD or defaults to `3.4.7` |
+| `get_ruby_version()` | Reads `.ruby-version` from CWD or defaults to `4.0.7` |
 | `sudo_cmd()` | Sets `SUDO` to `sudo` if needed and available, or `""` when already root (containers) or `sudo` isn't installed |
 | `detect_pkg_manager()` | Sets `PKG_MANAGER` to `brew` (macOS), `apt`, `dnf`, `pacman`, `zypper`, or `unknown` |
 | `pkg_install(...)` | Cross-distro install dispatcher — takes one package name per manager (apt/dnf/pacman/zypper/brew) and runs the right install command |

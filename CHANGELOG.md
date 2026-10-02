@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-02
+
+- Default Ruby version bumped from 3.4.7 to 4.0.7 (used when a project has no `.ruby-version` — `get_ruby_version()` in `run.sh`/`deploy.sh`, and the `.ruby-version` `validate.sh` writes for new projects)
+
 ## 2026-09-09
 
 - Fix `deploy.sh` staging deploy crashing with `local: can only be used in a function` — `exclude_args` (added for `S3_SYNC_EXCLUDES`) was declared `local` at top-level script scope, not inside a function
