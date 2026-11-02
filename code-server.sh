@@ -22,9 +22,9 @@ export PATH="$HOME/.local/bin:$PATH"
 
 VSCODE_PORT=8080
 
-if ! command -v coder &> /dev/null; then
-    echo -e "${WARN} coder not found, installing..."
-    curl -L https://coder.com/install.sh | sh
+if ! command -v code-server &> /dev/null; then
+    echo -e "${WARN} code-server not found, installing..."
+    curl -fsSL https://code-server.dev/install.sh | sh
 fi
 
 CERTS_DIR="$HOME/.config/certs"
@@ -38,7 +38,18 @@ else
     echo -e "${PASS} Certs found in ${CERTS_DIR}"
 fi
 
-if lsof -i :"$VSCODE_PORT" -sTCP:LISTEN &>/dev/null; then
+function port_in_use() {
+    local port="$1"
+    if command -v lsof &> /dev/null; then
+        lsof -i :"$port" -sTCP:LISTEN &>/dev/null
+    elif command -v ss &> /dev/null; then
+        ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${port}\$"
+    else
+        (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && { exec 3>&-; return 0; } || return 1
+    fi
+}
+
+if port_in_use "$VSCODE_PORT"; then
     echo -e "${FAIL} Port ${VSCODE_PORT} is in use. code-server cannot start."
     exit 1
 fi
@@ -46,14 +57,5 @@ fi
 echo -e "${PASS} Starting code-server on port ${VSCODE_PORT}..."
 RETURN_DIR="$PWD"
 trap 'cd "$RETURN_DIR"' EXIT
-
-export CODER_TLS_ENABLE=true
-export CODER_TLS_ADDRESS="0.0.0.0:$VSCODE_PORT"
-export CODER_REDIRECT_TO_ACCESS_URL=true
-export CODER_TLS_CERT_FILE="$CERT_FILE"
-export CODER_TLS_KEY_FILE="$KEY_FILE"
-
-cd ~/Development || exit 1
-coder server
-
-claude rc --set-folder=/Users/thomcowell/Development/
+cd ~
+code-server --bind-addr "0.0.0.0:${VSCODE_PORT}" --cert "$CERT_FILE" --cert-key "$KEY_FILE"
