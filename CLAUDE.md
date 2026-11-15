@@ -114,6 +114,8 @@ taken; `restore_nanoc_config()` restores it after compile (also on compile failu
 
 **Why resize instead of `full: true`:** Chrome's `captureBeyondViewport` (used by `full: true`) inflates `100vh` to the document height, breaking min-height layouts. Resizing the viewport to the document height before a regular screenshot avoids this entirely.
 
+**Height cap:** Chrome hangs (`Ferrum::TimeoutError`, regardless of timeout length) when the viewport is resized above 16384px. Step 6 therefore resizes to `min(scrollHeight, SCREENSHOT_MAX_HEIGHT)` (default 16000). `screenshot_pages` rescues `Ferrum::TimeoutError`/`StatusError` per page and returns an outcome hash per URL (`:ok`/`:capped`/`:failed`); failed pages are reported, not fatal, and the script exits 1.
+
 **Linux Chrome detection:** `find_browser()` checks `google-chrome`, `google-chrome-stable`, `chromium-browser`, `chromium` in turn, validating each candidate actually runs (`--version`) rather than trusting `command -v` alone — on Debian/Ubuntu, `chromium`/`chromium-browser` from apt are Snap-transitional stub scripts that exist on `PATH` but don't work without a running snapd. Falls back to installing Chromium via `pkg_install`, then Google Chrome from its official apt repo, then `snap install chromium`. Adds `--no-sandbox`/`--disable-dev-shm-usage` automatically when running as root (containers/CI).
 
 ### generate-transcripts.sh internals

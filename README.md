@@ -186,6 +186,33 @@ Pages are discovered automatically from `content/pages/**/*.haml` — no hardcod
 Output (screenshots + HTML report) goes to `tmp/screenshots/` in your project root.
 Report opens automatically in your browser on completion. Exits with code 1 if any pages are flagged.
 
+**Very tall pages:** Chrome can't paint a viewport taller than 16384px, so pages taller than
+`SCREENSHOT_MAX_HEIGHT` (default `16000` px) are captured at that height — on both the release
+and current sides, so the comparison stays valid — and noted as `capped` in the log and report
+(only the top part of the page is compared). If a page can't be captured at all (e.g. a
+timeout), it is logged, shown as `COULD NOT CAPTURE` in the report, the remaining pages still
+run, and the script exits 1 at the end.
+
+| Env var | Default | Purpose |
+|---------|---------|---------|
+| `SCREENSHOT_MAX_HEIGHT` | `16000` | Max captured page height in px (keep ≤ 16384) |
+| `SCREENSHOT_TIMEOUT` | `30` | Per-command browser timeout in seconds |
+
+**Sampling generated pages:** pages written into `output/` after compile (e.g. by a
+post-compile script generating `output/<source>/<slug>/index.html`) aren't nanoc items, so
+they aren't discovered automatically. Opt in with a `screenshot_samples` list in `nanoc.yaml`:
+
+```yaml
+screenshot_samples:
+  - path: some-dir     # directory under output/ holding <slug>/index.html pages
+    count: 10          # how many to screenshot
+```
+
+For each entry, slugs present in **both** the release and current builds are sorted and `count`
+evenly spaced ones are chosen (deterministic — no randomness), so both sides capture identical
+pages. Slugs that exist in only one build are skipped and the number is logged. Without the key,
+behaviour is unchanged.
+
 **Customising the freeze script:**
 
 Before each screenshot, the tool injects `screenshot-overrides.js` from your project root.

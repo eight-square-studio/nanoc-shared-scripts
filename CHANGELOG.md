@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-15
+
+- Fix `check-layouts.sh` failing when the project uses this repo as a submodule — the `release` worktree created by `tools/screenshot-compare.rb` had no submodules checked out, so compiling it crashed with `LoadError: cannot load such file -- .../nanoc-shared-scripts/lib/shared_helpers`. The script now runs `git submodule update --init --recursive` in the worktree right after creating it
+- Fix `check-layouts.sh` hanging then aborting with `Ferrum::TimeoutError` on very tall pages — Chrome can't paint a viewport taller than 16384px, so resizing to `scrollHeight` on a ~18000px page made `screenshot` hang (not a slow-timeout problem: it hangs even with a 60s timeout). Captured height is now capped at `SCREENSHOT_MAX_HEIGHT` (default 16000px) on both release and current so images stay comparable; capped pages are logged (`doc_h` is now logged for every page) and noted in the report
+- `check-layouts.sh`: a page that fails to capture (any `Ferrum::Error`; a dead browser is restarted) no longer aborts the run — it's logged, marked `COULD NOT CAPTURE` in the report, and the script exits 1 at the end
+- `check-layouts.sh`: Ferrum's per-command timeout is now explicit and configurable via `SCREENSHOT_TIMEOUT` (default 30s; Ferrum's own default is 5s)
+- `check-layouts.sh`: new opt-in `screenshot_samples` list in the project's `nanoc.yaml` — samples pages generated into `output/` after compile (invisible to `nanoc show-data`). For each `path:`/`count:` entry, takes slugs from `output/<path>/*/index.html` present in both release and current, and screenshots `count` evenly spaced ones (deterministic, so both builds capture identical pages); slugs in only one build are skipped and logged. Without the key, behaviour is unchanged. To pick slugs from both builds, current is now compiled before the release screenshots are taken
+
 ## 2026-10-02
 
 - Default Ruby version bumped from 3.4.7 to 4.0.7 (used when a project has no `.ruby-version` — `get_ruby_version()` in `run.sh`/`deploy.sh`, and the `.ruby-version` `validate.sh` writes for new projects)
