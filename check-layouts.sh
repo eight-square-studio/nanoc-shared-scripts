@@ -4,6 +4,8 @@ set -euo pipefail
 # Run from the project root: bash check-layouts.sh (or via symlink: ./check-layouts.sh)
 # Flags:
 #   --screenshot-only, -s   Screenshot current branch only; skip release comparison
+#   --strict                Exit 2 if any changed/removed page exceeds the threshold (also LAYOUT_STRICT=1)
+# Exit codes: 0 completed (new/changed pages are informational), 1 a page failed to capture or setup/compile failed, 2 strict-mode changes
 
 # Resolve symlink to find the real script directory, then source lib/_shared.sh
 _s="${BASH_SOURCE[0]}"
@@ -19,14 +21,22 @@ differences between the branches to enable quick comparison to target reviews.
 
 Options:
   -h, --help            Show this help message
-  -s, --screenshot-only Only take screenshots of the current content and do no comparison"
+  -s, --screenshot-only Only take screenshots of the current content and do no comparison
+      --strict          Exit 2 if any changed or removed page exceeds the change threshold
+                        (same as LAYOUT_STRICT=1). New pages never fail.
+
+Exit codes: 0 = run completed (new/changed pages are informational),
+            1 = a page could not be captured, or a compile/setup error,
+            2 = --strict and unexpected changed/removed pages"
 }
 
 # ── Parse flags ───────────────────────────────────────────────────────────────
 SCREENSHOT_ONLY=0
+LAYOUT_STRICT="${LAYOUT_STRICT:-0}"
 for arg in "$@"; do
     case "$arg" in
         --screenshot-only|-s) SCREENSHOT_ONLY=1 ;;
+        --strict) LAYOUT_STRICT=1 ;;
         -h|--help)
             print_help
             exit 0
@@ -138,4 +148,4 @@ fi
 initiate
 
 # ── Execute ───────────────────────────────────────────────────────────────────
-PROJECT_DIR="$current_dir" SCREENSHOT_ONLY="$SCREENSHOT_ONLY" CHROME_PATH="$CHROME_PATH" exec bundle exec ruby "$SHARED_SCRIPTS_DIR/tools/screenshot-compare.rb"
+PROJECT_DIR="$current_dir" SCREENSHOT_ONLY="$SCREENSHOT_ONLY" LAYOUT_STRICT="$LAYOUT_STRICT" CHROME_PATH="$CHROME_PATH" exec bundle exec ruby "$SHARED_SCRIPTS_DIR/tools/screenshot-compare.rb"

@@ -113,17 +113,43 @@ def url_to_filename(url)
   url.gsub('/', '_').sub(/^_/, '').sub(/_$/, '') + '.png'
 end
 
-# ── Sampled generated pages ───────────────────────────────────────────────────
-# Pages written into output/ after compile (not nanoc items) are invisible to
-# `nanoc show-data`. Opt in via nanoc.yaml:
-#   screenshot_samples:
-#     - path: some-dir     # directory under output/ containing <slug>/index.html
+# ── Project config (nanoc.yaml) ───────────────────────────────────────────────
+#   screenshot_threshold: 1.0              # % of changed pixels above which a page is `changed`
+#   screenshot_expected_changes: [/, /privacy/]   # reported as `changed (expected)`, never trip --strict
+#   screenshot_samples:                    # pages generated into output/ after compile
+#     - path: some-dir                     # directory under output/ containing <slug>/index.html
 #       count: 10
 
-def sample_config(project_dir)
+def load_project_config(project_dir)
   file = File.join(project_dir, 'nanoc.yaml')
-  return [] unless File.exist?(file)
-  entries = YAML.safe_load(File.read(file), permitted_classes: [Symbol], aliases: true)&.dig('screenshot_samples')
+  return {} unless File.exist?(file)
+  cfg = YAML.safe_load(File.read(file), permitted_classes: [Symbol], aliases: true)
+  cfg.is_a?(Hash) ? cfg : {}
+end
+
+PROJECT_CONFIG = load_project_config(PROJECT_DIR)
+
+def threshold_config(cfg)
+  raw = cfg['screenshot_threshold']
+  return 1.0 if raw.nil?
+  Float(raw)
+rescue ArgumentError, TypeError
+  log "⚠ screenshot_threshold #{raw.inspect} is not a number — using 1.0"
+  1.0
+end
+
+def expected_changes_config(cfg)
+  raw = cfg['screenshot_expected_changes']
+  return [] if raw.nil?
+  unless raw.is_a?(Array)
+    log '⚠ screenshot_expected_changes must be a list — ignoring'
+    return []
+  end
+  raw.map { |u| "/#{u.to_s.strip.sub(%r{\A/+}, '')}" }
+end
+
+def sample_config(cfg)
+  entries = cfg['screenshot_samples']
   return [] if entries.nil?
   unless entries.is_a?(Array)
     log '⚠ screenshot_samples must be a list — ignoring'
@@ -140,6 +166,14 @@ def sample_config(project_dir)
   end
 end
 
+THRESHOLD        = threshold_config(PROJECT_CONFIG)
+EXPECTED_CHANGES = expected_changes_config(PROJECT_CONFIG)
+STRICT           = ENV['LAYOUT_STRICT'] == '1'
+
+# ── Sampled generated pages ───────────────────────────────────────────────────
+# Pages written into output/ after compile (not nanoc items) are invisible to
+# `nanoc show-data`, so they are sampled from output/<path>/*/index.html instead.
+
 def list_slugs(build_dir, path)
   Dir.glob(File.join(build_dir, 'output', path, '*', 'index.html'))
      .map { |f| File.basename(File.dirname(f)) }.sort
@@ -153,26 +187,51 @@ def evenly_spaced(list, count)
   list.values_at(*idx)
 end
 
-# build_dirs: every build that will be screenshotted. Only slugs present in all of
-# them are eligible, so each build screenshots identical pages.
-def sample_pages(config, build_dirs)
+# builds: { release: dir, current: dir } (or just { current: dir }). Slugs present in
+# every build are sampled first, so each build screenshots identical pages. If there
+# are no common slugs (one build lacks those pages — no baseline), sample each build's
+# own slugs instead; those pages are then reported as new/removed rather than dropped.
+# Returns pages tagged with the builds (:sides) they should be screenshotted in.
+def sample_pages(config, builds)
   config.flat_map do |entry|
-    per_build = build_dirs.map { |d| list_slugs(d, entry[:path]) }
-    common    = per_build.reduce(:&)
-    skipped   = per_build.flatten.uniq.size - common.size
-    picked    = evenly_spaced(common, entry[:count])
-    log "Sampling /#{entry[:path]}/: #{picked.size} of #{common.size} common pages" \
-        "#{skipped > 0 ? " (#{skipped} skipped — only in one build)" : ''}: #{picked.join(', ')}"
-    picked.map do |slug|
+    slugs  = builds.transform_values { |dir| list_slugs(dir, entry[:path]) }
+    common = slugs.values.reduce(:&)
+    label  = "Sampling /#{entry[:path]}/:"
+    counts = slugs.map { |side, list| "#{side} #{list.size}" }.join(', ')
+
+    chosen =
+      if common.any? || builds.size == 1
+        picked  = evenly_spaced(common, entry[:count])
+        skipped = slugs.values.flatten.uniq.size - common.size
+        log "#{label} #{picked.size} of #{common.size} common pages" \
+            "#{skipped > 0 ? " (#{skipped} skipped — only in one build)" : ''}: #{picked.join(', ')}"
+        picked.map { |slug| [slug, builds.keys] }
+      else
+        per_side = slugs.transform_values { |list| evenly_spaced(list, entry[:count]) }
+        if per_side.values.all?(&:empty?)
+          log "#{label} no pages in any build (#{counts})"
+        else
+          log "#{label} no common pages (#{counts}) — no baseline, so sampling each build's own " \
+              "pages (reported as new/removed): " \
+              "#{per_side.map { |side, l| "#{side}: #{l.join(', ')}" }.reject { |x| x.end_with?(': ') }.join(' | ')}"
+        end
+        per_side.flat_map { |side, list| list.map { |slug| [slug, [side]] } }
+      end
+
+    chosen.map do |slug, sides|
       url = "/#{entry[:path]}/#{slug}/"
-      { url: url, filename: url_to_filename(url) }
+      { url: url, filename: url_to_filename(url), sides: sides }
     end
   end
 end
 
-def with_samples(pages, samples) = (pages + samples).uniq { |p| p[:url] }.sort_by { |p| p[:url] }
+def with_samples(pages, samples, side)
+  (pages + samples.select { |p| p[:sides].include?(side) }).uniq { |p| p[:url] }.sort_by { |p| p[:url] }
+end
 
 # ── Screenshot ────────────────────────────────────────────────────────────────
+
+class CaptureError < StandardError; end
 
 OVERRIDES_PATH = File.join(PROJECT_DIR, 'screenshot-overrides.js')
 FREEZE_SCRIPT  = File.exist?(OVERRIDES_PATH) ? File.read(OVERRIDES_PATH) : nil
@@ -187,7 +246,7 @@ def screenshot_pages(pages, base_url, out_dir, browser)
     log "  #{url} → #{page[:filename]}"
     outcome = begin
       capture_page(url, out, browser)
-    rescue Ferrum::Error => e
+    rescue Ferrum::Error, CaptureError => e
       FileUtils.rm_f(out)
       browser.restart if e.is_a?(Ferrum::DeadBrowserError)
       log "  ⚠ could not capture #{page[:url]}: #{e.class}: #{e.message.lines.first&.strip}"
@@ -200,6 +259,8 @@ end
 def capture_page(url, out, browser)
   browser.resize(width: 1440, height: 900)
   browser.goto(url)
+  status = browser.network.status
+  raise CaptureError, "HTTP #{status}" if status && status >= 400
   browser.network.wait_for_idle(duration: 0.3, timeout: 30)
   browser.execute(FREEZE_SCRIPT) if FREEZE_SCRIPT
   browser.network.wait_for_idle(duration: 0.3, timeout: 10)
@@ -216,7 +277,7 @@ end
 
 # ── ImageMagick compare ───────────────────────────────────────────────────────
 
-def compare_images(current, release_img, diff)
+def compare_images(current, release_img, diff, threshold)
   w, h = `identify -format "%w %h" "#{current}"`.strip.split.map(&:to_i)
   total = w * h
 
@@ -225,7 +286,7 @@ def compare_images(current, release_img, diff)
   ae = output.strip.to_f
 
   pct = total > 0 ? (ae / total * 100).round(2) : 0.0
-  { ae: ae.to_i, total: total, pct: pct, flagged: pct > 1.0 }
+  { ae: ae.to_i, total: total, pct: pct, status: pct > threshold ? :changed : :unchanged }
 end
 
 # Human-readable notes for a screenshot outcome (capped / failed).
@@ -245,33 +306,55 @@ def embed_image(path)
   "data:image/png;base64,#{Base64.strict_encode64(File.binread(path))}"
 end
 
+STATUS_ORDER = { failed: 0, removed: 1, changed: 2, new: 3, unchanged: 4 }.freeze
+
+def status_label(r)
+  r[:expected] && %i[changed removed].include?(r[:status]) ? "#{r[:status]} (expected)" : r[:status].to_s
+end
+
+def status_counts(results)
+  by = results.group_by { |r| r[:status] }
+  { failed: by.fetch(:failed, []).size, new: by.fetch(:new, []).size,
+    removed: by.fetch(:removed, []).size, changed: by.fetch(:changed, []).size,
+    expected: results.count { |r| r[:expected] && %i[changed removed].include?(r[:status]) },
+    unchanged: by.fetch(:unchanged, []).size }
+end
+
+def summary_line(results)
+  c = status_counts(results)
+  parts = ["#{c[:failed]} failed", "#{c[:new]} new"]
+  parts << "#{c[:removed]} removed" if c[:removed] > 0
+  parts << "#{c[:changed]} changed#{c[:expected] > 0 ? " (#{c[:expected]} expected)" : ''}"
+  parts << "#{c[:unchanged]} unchanged"
+  "#{parts.join(', ')} of #{results.size} pages"
+end
+
+def sort_results(results)
+  results.sort_by { |r| [STATUS_ORDER[r[:status]], -(r[:pct] || 0), r[:url]] }
+end
+
+def pct_text(r) = r[:pct] ? "#{r[:pct]}%" : (r[:status] == :new ? 'new, no baseline' : '—')
+
 def generate_report(results, out_path)
-  rows = results.sort_by { |r| [r[:failed] ? 0 : 1, -r[:pct]] }
+  rows = sort_results(results)
 
   summary_rows = rows.map do |r|
-    status = if r[:failed]
-               '<span class="fail">COULD NOT CAPTURE</span>'
-             elsif r[:flagged]
-               '<span class="fail">FAIL</span>'
-             else
-               '<span class="pass">PASS</span>'
-             end
-    change = r[:failed] ? '—' : "#{r[:pct]}%"
     note = r[:notes].to_a.empty? ? '' : "<br><small>#{r[:notes].join('<br>')}</small>"
-    "<tr><td>#{r[:url]}#{note}</td><td>#{change}</td><td>#{status}</td></tr>"
+    "<tr><td>#{r[:url]}#{note}</td><td>#{pct_text(r)}</td>" \
+      "<td><span class=\"st st-#{r[:status]}#{r[:expected] ? ' st-expected' : ''}\">#{status_label(r)}</span></td></tr>"
   end.join("\n")
 
-  detail_sections = rows.select { |r| r[:flagged] && !r[:failed] }.map do |r|
-    <<~HTML
-      <section class="diff-section">
-        <h2>#{r[:url]} — #{r[:pct]}% changed</h2>
-        <div class="images">
-          <figure><figcaption>Release (baseline)</figcaption><img src="#{embed_image(r[:release_path])}"></figure>
-          <figure><figcaption>Current</figcaption><img src="#{embed_image(r[:current_path])}"></figure>
-          <figure><figcaption>Diff</figcaption><img src="#{embed_image(r[:diff_path])}"></figure>
-        </div>
-      </section>
-    HTML
+  detail_sections = rows.filter_map do |r|
+    figures = case r[:status]
+              when :changed
+                [['Release (baseline)', r[:release_path]], ['Current', r[:current_path]], ['Diff', r[:diff_path]]]
+              when :new     then [['Current (new — no baseline)', r[:current_path]]]
+              when :removed then [['Release (page no longer exists)', r[:release_path]]]
+              end
+    next unless figures
+    heading = r[:status] == :changed ? "#{r[:url]} — #{r[:pct]}% changed" : "#{r[:url]} — #{r[:status]}"
+    imgs = figures.map { |cap, path| "<figure><figcaption>#{cap}</figcaption><img src=\"#{embed_image(path)}\"></figure>" }.join
+    %(<section class="diff-section"><h2>#{heading}</h2><div class="images n#{figures.size}">#{imgs}</div></section>)
   end.join("\n")
 
   html = <<~HTML
@@ -282,28 +365,36 @@ def generate_report(results, out_path)
       <title>Layout Comparison Report</title>
       <style>
         body { font-family: system-ui, sans-serif; margin: 2rem; background: #111; color: #eee; }
-        h1 { margin-bottom: 1rem; }
+        h1 { margin-bottom: 0.5rem; }
+        .summary { color: #aaa; margin-bottom: 1.5rem; }
         table { border-collapse: collapse; width: 100%; margin-bottom: 3rem; }
         th, td { padding: 0.5rem 1rem; border: 1px solid #333; text-align: left; }
         th { background: #222; }
-        .pass { color: #4caf50; font-weight: bold; }
-        .fail { color: #f44336; font-weight: bold; }
+        .st { font-weight: bold; }
+        .st-failed { color: #f44336; }
+        .st-removed { color: #ff9800; }
+        .st-changed { color: #ffc107; }
+        .st-new { color: #42a5f5; }
+        .st-unchanged { color: #4caf50; }
+        .st-expected { opacity: 0.6; }
         small { color: #aaa; }
         .diff-section { margin-bottom: 4rem; }
         .images { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .images.n1 { grid-template-columns: 1fr; max-width: 50%; }
         .images img { width: 100%; border: 1px solid #333; }
         figcaption { font-size: 0.8rem; color: #aaa; margin-bottom: 0.25rem; }
       </style>
     </head>
     <body>
       <h1>Layout Comparison — #{Time.now.strftime('%Y-%m-%d %H:%M')}</h1>
+      <p class="summary">#{summary_line(results)} · changed threshold #{THRESHOLD}%</p>
       <table>
         <thead><tr><th>Page</th><th>Change</th><th>Status</th></tr></thead>
         <tbody>
           #{summary_rows}
         </tbody>
       </table>
-      #{detail_sections.empty? && results.none? { |r| r[:failed] } ? '<p style="color:#4caf50">No regressions detected.</p>' : detail_sections}
+      #{detail_sections}
     </body>
     </html>
   HTML
@@ -366,7 +457,7 @@ if SCREENSHOT_ONLY
 
   current_pages = discover_pages(PROJECT_DIR)
   log "Found #{current_pages.size} pages"
-  current_pages = with_samples(current_pages, sample_pages(sample_config(PROJECT_DIR), [PROJECT_DIR]))
+  current_pages = with_samples(current_pages, sample_pages(sample_config(PROJECT_CONFIG), { current: PROJECT_DIR }), :current)
 
   current_pid = start_server(3000, dir: PROJECT_DIR)
   browser = new_browser
@@ -407,9 +498,9 @@ log "Found #{release_pages.size} pages in release"
 current_pages = discover_pages(PROJECT_DIR)
 log "Found #{current_pages.size} pages in current"
 
-samples       = sample_pages(sample_config(PROJECT_DIR), [WORKTREE, PROJECT_DIR])
-release_pages = with_samples(release_pages, samples)
-current_pages = with_samples(current_pages, samples)
+samples       = sample_pages(sample_config(PROJECT_CONFIG), { release: WORKTREE, current: PROJECT_DIR })
+release_pages = with_samples(release_pages, samples, :release)
+current_pages = with_samples(current_pages, samples, :current)
 
 release_pid = start_server(3001, dir: WORKTREE)
 browser = new_browser
@@ -433,41 +524,53 @@ end
 
 # -- Compare
 log 'Comparing screenshots'
-all_filenames = (release_pages + current_pages).map { |p| p[:filename] }.uniq.sort
+release_urls = release_pages.map { |p| p[:url] }
+current_urls = current_pages.map { |p| p[:url] }
+all_pages    = (release_pages + current_pages).uniq { |p| p[:url] }.sort_by { |p| p[:url] }
 
-results = all_filenames.map do |filename|
-  current_path = "#{TMP_BASE}/current/#{filename}"
-  release_path = "#{TMP_BASE}/release/#{filename}"
-  diff_path    = "#{TMP_BASE}/diffs/#{filename}"
-
-  url = current_pages.find { |p| p[:filename] == filename }&.dig(:url) ||
-        release_pages.find { |p| p[:filename] == filename }&.dig(:url) ||
-        filename
-
-  outcomes = { release: release_outcomes[url], current: current_outcomes[url] }
-  notes = outcomes.flat_map { |side, o| capture_notes(o).map { |n| "#{side}: #{n}" } }
-  paths = { current_path: current_path, release_path: release_path, diff_path: diff_path }
+results = all_pages.map do |page|
+  url, filename = page.values_at(:url, :filename)
+  paths = { current_path: "#{TMP_BASE}/current/#{filename}", release_path: "#{TMP_BASE}/release/#{filename}",
+            diff_path: "#{TMP_BASE}/diffs/#{filename}" }
+  in_release = release_urls.include?(url)
+  in_current = current_urls.include?(url)
+  outcomes   = { release: release_outcomes[url], current: current_outcomes[url] }
+  notes      = outcomes.flat_map { |side, o| capture_notes(o).map { |n| "#{side}: #{n}" } }
+  result     = { url: url, filename: filename, notes: notes, pct: nil, ae: 0, total: 0,
+                 expected: EXPECTED_CHANGES.include?(url), **paths }
 
   if outcomes.values.any? { |o| o&.dig(:status) == :failed }
-    next { url: url, filename: filename, pct: 0.0, flagged: true, failed: true,
-           ae: 0, total: 0, notes: notes, **paths }
+    result.merge(status: :failed)
+  elsif in_current && !in_release
+    result.merge(status: :new)
+  elsif in_release && !in_current
+    result.merge(status: :removed)
+  elsif !(File.exist?(paths[:current_path]) && File.exist?(paths[:release_path]))
+    result.merge(status: :failed, notes: notes + ['screenshot missing'])
+  else
+    result.merge(compare_images(paths[:current_path], paths[:release_path], paths[:diff_path], THRESHOLD))
   end
-
-  unless File.exist?(current_path) && File.exist?(release_path)
-    next { url: url, filename: filename, pct: 100.0, flagged: true,
-           ae: 0, total: 0, current_path: current_path,
-           release_path: release_path, diff_path: diff_path }
-  end
-
-  compare_images(current_path, release_path, diff_path)
-    .merge(url: url, filename: filename, notes: notes, **paths)
 end
 
 report_path = "#{TMP_BASE}/report.html"
 generate_report(results, report_path)
 open_report(report_path)
 
-flagged = results.count { |r| r[:flagged] }
-failed  = results.count { |r| r[:failed] }
-log "Done — #{flagged}/#{results.size} pages flagged#{failed > 0 ? " (#{failed} could not be captured)" : ''}"
-exit(flagged > 0 ? 1 : 0)
+sort_results(results).each do |r|
+  log format('  %-18s %-16s %s', status_label(r), pct_text(r), r[:url])
+end
+log "Done — #{summary_line(results)}"
+
+# Exit codes: 0 = completed (new/changed are informational); 1 = a page failed to
+# capture (setup/compile errors also exit 1 via run!); 2 = --strict and unexpected
+# changed/removed pages. `new` pages never fail.
+failed  = results.count { |r| r[:status] == :failed }
+tripped = results.count { |r| %i[changed removed].include?(r[:status]) && !r[:expected] }
+if failed > 0
+  log "#{failed} page(s) failed — exit 1"
+  exit 1
+elsif STRICT && tripped > 0
+  log "Strict mode: #{tripped} changed/removed page(s) above #{THRESHOLD}% — exit 2"
+  exit 2
+end
+exit 0
