@@ -169,12 +169,13 @@ Production reads from `production:` block if present, falls back to top-level ke
 ### check-layouts.sh — visual regression comparison
 
 Compares full-page screenshots of every published page between your current branch
-and `release`. Highlights pixel-level differences and flags pages where >1% of pixels changed.
+and `release`. Highlights pixel-level differences and labels each page with a status.
 
 ```bash
 ./check-layouts.sh                 # full compare: current vs release
 ./check-layouts.sh --screenshot-only   # screenshot current branch only, no compare
 ./check-layouts.sh -s              # same, short form
+./check-layouts.sh --strict         # also exit 2 if pages changed beyond the threshold (or LAYOUT_STRICT=1)
 ```
 
 **Prerequisites:**
@@ -184,7 +185,34 @@ and `release`. Highlights pixel-level differences and flags pages where >1% of p
 
 Pages are discovered automatically from `content/pages/**/*.haml` — no hardcoded list.
 Output (screenshots + HTML report) goes to `tmp/screenshots/` in your project root.
-Report opens automatically in your browser on completion. Exits with code 1 if any pages are flagged.
+Report opens automatically in your browser on completion.
+
+**Page statuses** (console summary and `report.html`):
+
+| Status | Meaning |
+|--------|---------|
+| `failed` | Could not be captured (timeout, browser error, HTTP 4xx/5xx) |
+| `new` | In current but not in `release` — nothing to compare, shown as "new, no baseline" |
+| `removed` | In `release` but not in current |
+| `changed` | More than the threshold (default 1.0%) of pixels differ |
+| `unchanged` | At or below the threshold |
+
+The last line reads e.g. `Done — 0 failed, 36 new, 10 changed, 0 unchanged of 46 pages`.
+
+**Exit codes:**
+
+| Code | When |
+|------|------|
+| `0` | Run completed. `new`, `changed` and `removed` pages are informational |
+| `1` | Any `failed` page, or a setup/compile/worktree error |
+| `2` | Only with `--strict` (or `LAYOUT_STRICT=1`): one or more `changed`/`removed` pages not listed as expected. `new` pages never fail |
+
+**Config (optional, in `nanoc.yaml`):**
+
+```yaml
+screenshot_threshold: 1.0                       # % of pixels changed before a page counts as `changed`
+screenshot_expected_changes: [/, /privacy/]     # shown as `changed (expected)`; never trip --strict
+```
 
 **Very tall pages:** Chrome can't paint a viewport taller than 16384px, so pages taller than
 `SCREENSHOT_MAX_HEIGHT` (default `16000` px) are captured at that height — on both the release
@@ -212,6 +240,11 @@ For each entry, slugs present in **both** the release and current builds are sor
 evenly spaced ones are chosen (deterministic — no randomness), so both sides capture identical
 pages. Slugs that exist in only one build are skipped and the number is logged. Without the key,
 behaviour is unchanged.
+
+**No baseline for a sample directory:** if the two builds share no slugs under a `path` (e.g.
+`release` has no generated pages yet), nothing is dropped — each build's own evenly spaced picks
+are screenshotted and reported as `new` (current only) or `removed` (release only). The log says
+how many were sampled and why.
 
 **Customising the freeze script:**
 
