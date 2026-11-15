@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-# Setup environment and run nanoc — watch + serve by default, or compile only with --no-watch
+# Run a Coder server with TLS certs for remote browser access
 
 # Resolve symlinks to find the real script directory
 _s="${BASH_SOURCE[0]}"
@@ -55,5 +55,3 @@ export CODER_TLS_KEY_FILE="$KEY_FILE"
 
 cd ~/Development || exit 1
 coder server
-
-claude rc --set-folder=/Users/thomcowell/Development/

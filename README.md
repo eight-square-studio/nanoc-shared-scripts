@@ -95,6 +95,56 @@ Requires TLS certs at `~/.config/certs/` (a `.crt` and `.key` file). Auto-instal
 `code-server` via the official install script if not found. Binds to `0.0.0.0:8080`.
 Exits with an error if certs are missing or the port is already in use.
 
+### coder.sh — remote Coder server
+
+Standalone alternative to `code-server.sh` that runs a [Coder](https://coder.com) server
+over TLS instead of `code-server`.
+
+```bash
+./nanoc-shared-scripts/coder.sh                      # run coder server on port 8080
+```
+
+Same prerequisites as `code-server.sh`: TLS certs in `~/.config/certs/` (a `.crt` and
+`.key` file; exits `9` if missing), and exits `1` if port 8080 is in use. Auto-installs
+`coder` via `https://coder.com/install.sh` if not found. Starts `coder server` from
+`~/Development`, listening on `0.0.0.0:8080` with `CODER_REDIRECT_TO_ACCESS_URL=true`.
+Not symlinked by `validate.sh` — run it by path.
+
+### setup.sh — environment setup only
+
+Installs/validates rbenv, the project's Ruby version and bundler dependencies, and checks
+nanoc — without compiling or deploying. Run from the project root (`nanoc.yaml` must exist).
+Not symlinked by `validate.sh`.
+
+```bash
+bash ./nanoc-shared-scripts/setup.sh
+```
+
+### fix-content-type.sh — fix S3 Content-Type
+
+Rewrites the `Content-Type` of already-deployed S3 objects (e.g. extensionless files like
+`.well-known/apple-app-site-association` that `aws s3 sync` guessed wrong) without
+redeploying. Run from the project root; requires the `aws` CLI and credentials.
+Not symlinked by `validate.sh` — run it by path.
+
+```bash
+./nanoc-shared-scripts/fix-content-type.sh --key '.well-known/apple-app-site-association' --content-type 'application/json'
+./nanoc-shared-scripts/fix-content-type.sh --csv fixes.csv           # many files at once
+./nanoc-shared-scripts/fix-content-type.sh --staging --key foo --content-type text/plain
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--key KEY` | S3 object key to fix |
+| `--content-type TYPE` | Content-Type to set |
+| `--csv FILE` | Batch mode: lines of `key,content-type`. Header row optional; blank lines and `#` comments ignored |
+| `--bucket BUCKET` | Override the bucket (default: `s3_bucket` from `nanoc.yaml`) |
+| `--region REGION` | Override the region (default: `$AWS_REGION`, then `aws_region` from `nanoc.yaml`) |
+| `--staging` | Read bucket/region from the `staging:` block in `nanoc.yaml` |
+
+It copies each object onto itself with `--metadata-directive REPLACE`. CloudFront is **not**
+invalidated — invalidate the path afterwards if the old type is cached.
+
 ### deploy.sh — production deploy
 
 Full deploy pipeline. Must be run from the project root (the directory

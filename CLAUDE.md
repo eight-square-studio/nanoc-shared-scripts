@@ -27,6 +27,9 @@ editing the scripts.
 deploy.sh          # S3 sync, CloudFront invalidation, release tagging
 run.sh             # Watch + serve (default), one-off compile (--no-watch)
 code-server.sh     # Standalone: run code-server with TLS certs (does not source lib/_shared.sh)
+coder.sh           # Standalone: run `coder server` with TLS certs (does not source lib/_shared.sh)
+setup.sh           # Environment setup only (initiate()) — no compile/deploy
+fix-content-type.sh # Fix S3 Content-Type for deployed keys (uses lib/deploy_helpers.sh)
 validate.sh        # One-time setup check; writes .validated and creates symlinks
 check-layouts.sh   # Visual regression screenshot comparison (current branch vs release)
 generate-transcripts.sh # Batch-generate WebVTT caption transcripts for a folder of videos (whisper.cpp)
@@ -74,7 +77,7 @@ All scripts must be run from the project root; `deploy.sh` and `run.sh` enforce 
 ### lib/deploy_helpers.sh internals
 
 Sourced by `deploy.sh` (both `read_deploy_config()` and `set_s3_content_type()`
-were pulled out of `deploy.sh` so a future standalone `fix-content-type.sh`
+were pulled out of `deploy.sh` so the standalone `fix-content-type.sh`
 script can reuse them without pulling in the rest of `deploy.sh`). Relies on
 `current_dir`, `AWS_REGION`, `STAGING`, and the `PASS`/`FAIL` colour constants
 from `lib/_shared.sh` — must be sourced after it.
