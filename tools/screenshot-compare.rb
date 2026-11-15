@@ -6,6 +6,7 @@ require 'fileutils'
 require 'open3'
 require 'socket'
 require 'base64'
+require 'yaml'
 
 PROJECT_DIR     = ENV.fetch('PROJECT_DIR') { abort 'PROJECT_DIR env var not set — run via check-layouts.sh' }
 TMP_BASE        = File.join(PROJECT_DIR, 'tmp', 'screenshots')
@@ -13,12 +14,20 @@ WORKTREE        = File.join(PROJECT_DIR, 'tmp', 'worktree-release')
 SCREENSHOT_ONLY = ENV['SCREENSHOT_ONLY'] == '1'
 CHROME_PATH     = ENV['CHROME_PATH']
 
+# Chrome cannot paint a viewport taller than 16384px (GPU texture limit): resizing
+# past it makes Page.captureScreenshot hang until the CDP timeout. Taller pages are
+# captured at this height instead — the same cap applies to release and current, so
+# the images stay comparable (only the top MAX_HEIGHT px of a very tall page is diffed).
+MAX_HEIGHT      = Integer(ENV.fetch('SCREENSHOT_MAX_HEIGHT', 16_000))
+# Per-command CDP timeout in seconds (Ferrum's own default is 5s).
+TIMEOUT         = Integer(ENV.fetch('SCREENSHOT_TIMEOUT', 30))
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def log(msg) = puts("▶ #{msg}")
 
 def new_browser
-  opts = { headless: true, window_size: [1440, 900] }
+  opts = { headless: true, window_size: [1440, 900], timeout: TIMEOUT }
   opts[:browser_path] = CHROME_PATH if CHROME_PATH && !CHROME_PATH.empty?
   # Chrome refuses to launch its sandbox as root (common in CI/containers).
   # Containers also typically cap /dev/shm at 64MB, which crashes Chrome's
@@ -104,28 +113,105 @@ def url_to_filename(url)
   url.gsub('/', '_').sub(/^_/, '').sub(/_$/, '') + '.png'
 end
 
+# ── Sampled generated pages ───────────────────────────────────────────────────
+# Pages written into output/ after compile (not nanoc items) are invisible to
+# `nanoc show-data`. Opt in via nanoc.yaml:
+#   screenshot_samples:
+#     - path: some-dir     # directory under output/ containing <slug>/index.html
+#       count: 10
+
+def sample_config(project_dir)
+  file = File.join(project_dir, 'nanoc.yaml')
+  return [] unless File.exist?(file)
+  entries = YAML.safe_load(File.read(file), permitted_classes: [Symbol], aliases: true)&.dig('screenshot_samples')
+  return [] if entries.nil?
+  unless entries.is_a?(Array)
+    log '⚠ screenshot_samples must be a list — ignoring'
+    return []
+  end
+  entries.filter_map do |e|
+    path  = e.is_a?(Hash) ? e['path'].to_s.gsub(%r{\A/+|/+\z}, '') : ''
+    count = e.is_a?(Hash) ? e['count'].to_i : 0
+    if path.empty? || count < 1
+      log "⚠ screenshot_samples: skipping invalid entry #{e.inspect} (needs path and count >= 1)"
+      next
+    end
+    { path: path, count: count }
+  end
+end
+
+def list_slugs(build_dir, path)
+  Dir.glob(File.join(build_dir, 'output', path, '*', 'index.html'))
+     .map { |f| File.basename(File.dirname(f)) }.sort
+end
+
+# Deterministic: `count` evenly spaced items from a sorted list (first and last included).
+def evenly_spaced(list, count)
+  return list if count >= list.size
+  return [list.first] if count == 1
+  idx = (0...count).map { |i| (i * (list.size - 1).to_f / (count - 1)).round }.uniq
+  list.values_at(*idx)
+end
+
+# build_dirs: every build that will be screenshotted. Only slugs present in all of
+# them are eligible, so each build screenshots identical pages.
+def sample_pages(config, build_dirs)
+  config.flat_map do |entry|
+    per_build = build_dirs.map { |d| list_slugs(d, entry[:path]) }
+    common    = per_build.reduce(:&)
+    skipped   = per_build.flatten.uniq.size - common.size
+    picked    = evenly_spaced(common, entry[:count])
+    log "Sampling /#{entry[:path]}/: #{picked.size} of #{common.size} common pages" \
+        "#{skipped > 0 ? " (#{skipped} skipped — only in one build)" : ''}: #{picked.join(', ')}"
+    picked.map do |slug|
+      url = "/#{entry[:path]}/#{slug}/"
+      { url: url, filename: url_to_filename(url) }
+    end
+  end
+end
+
+def with_samples(pages, samples) = (pages + samples).uniq { |p| p[:url] }.sort_by { |p| p[:url] }
+
 # ── Screenshot ────────────────────────────────────────────────────────────────
 
 OVERRIDES_PATH = File.join(PROJECT_DIR, 'screenshot-overrides.js')
 FREEZE_SCRIPT  = File.exist?(OVERRIDES_PATH) ? File.read(OVERRIDES_PATH) : nil
 
+# Returns { url => { status: :ok | :capped | :failed, doc_h:, error: } }.
+# A page that times out is logged and recorded as :failed instead of aborting the run.
 def screenshot_pages(pages, base_url, out_dir, browser)
   FileUtils.mkdir_p(out_dir)
-  pages.each do |page|
+  pages.to_h do |page|
     url = "#{base_url}#{page[:url]}"
     out = File.join(out_dir, page[:filename])
     log "  #{url} → #{page[:filename]}"
-    browser.resize(width: 1440, height: 900)
-    browser.goto(url)
-    browser.network.wait_for_idle(duration: 0.3, timeout: 30)
-    browser.execute(FREEZE_SCRIPT) if FREEZE_SCRIPT
-    browser.network.wait_for_idle(duration: 0.3, timeout: 10)
-    50.times { break if browser.evaluate("window.__renderReady === true"); sleep 0.1 }
-    doc_h = browser.evaluate('document.documentElement.scrollHeight')
-    browser.resize(width: 1440, height: doc_h)
-    sleep 0.5
-    browser.screenshot(path: out, full: false)
+    outcome = begin
+      capture_page(url, out, browser)
+    rescue Ferrum::Error => e
+      FileUtils.rm_f(out)
+      browser.restart if e.is_a?(Ferrum::DeadBrowserError)
+      log "  ⚠ could not capture #{page[:url]}: #{e.class}: #{e.message.lines.first&.strip}"
+      { status: :failed, error: e.class.name }
+    end
+    [page[:url], outcome]
   end
+end
+
+def capture_page(url, out, browser)
+  browser.resize(width: 1440, height: 900)
+  browser.goto(url)
+  browser.network.wait_for_idle(duration: 0.3, timeout: 30)
+  browser.execute(FREEZE_SCRIPT) if FREEZE_SCRIPT
+  browser.network.wait_for_idle(duration: 0.3, timeout: 10)
+  50.times { break if browser.evaluate("window.__renderReady === true"); sleep 0.1 }
+  doc_h = browser.evaluate('document.documentElement.scrollHeight')
+  capped = doc_h > MAX_HEIGHT
+  log "    doc_h=#{doc_h}px"
+  log "    ⚠ capped at #{MAX_HEIGHT}px (page is #{doc_h}px tall)" if capped
+  browser.resize(width: 1440, height: [doc_h, MAX_HEIGHT].min)
+  sleep 0.5
+  browser.screenshot(path: out, full: false)
+  { status: capped ? :capped : :ok, doc_h: doc_h }
 end
 
 # ── ImageMagick compare ───────────────────────────────────────────────────────
@@ -142,6 +228,16 @@ def compare_images(current, release_img, diff)
   { ae: ae.to_i, total: total, pct: pct, flagged: pct > 1.0 }
 end
 
+# Human-readable notes for a screenshot outcome (capped / failed).
+def capture_notes(outcome)
+  return [] unless outcome
+  case outcome[:status]
+  when :capped then ["capped at #{MAX_HEIGHT}px (full page #{outcome[:doc_h]}px)"]
+  when :failed then ["could not capture (#{outcome[:error]})"]
+  else []
+  end
+end
+
 # ── HTML report ───────────────────────────────────────────────────────────────
 
 def embed_image(path)
@@ -150,14 +246,22 @@ def embed_image(path)
 end
 
 def generate_report(results, out_path)
-  rows = results.sort_by { |r| -r[:pct] }
+  rows = results.sort_by { |r| [r[:failed] ? 0 : 1, -r[:pct]] }
 
   summary_rows = rows.map do |r|
-    status = r[:flagged] ? '<span class="fail">FAIL</span>' : '<span class="pass">PASS</span>'
-    "<tr><td>#{r[:url]}</td><td>#{r[:pct]}%</td><td>#{status}</td></tr>"
+    status = if r[:failed]
+               '<span class="fail">COULD NOT CAPTURE</span>'
+             elsif r[:flagged]
+               '<span class="fail">FAIL</span>'
+             else
+               '<span class="pass">PASS</span>'
+             end
+    change = r[:failed] ? '—' : "#{r[:pct]}%"
+    note = r[:notes].to_a.empty? ? '' : "<br><small>#{r[:notes].join('<br>')}</small>"
+    "<tr><td>#{r[:url]}#{note}</td><td>#{change}</td><td>#{status}</td></tr>"
   end.join("\n")
 
-  detail_sections = rows.select { |r| r[:flagged] }.map do |r|
+  detail_sections = rows.select { |r| r[:flagged] && !r[:failed] }.map do |r|
     <<~HTML
       <section class="diff-section">
         <h2>#{r[:url]} — #{r[:pct]}% changed</h2>
@@ -184,6 +288,7 @@ def generate_report(results, out_path)
         th { background: #222; }
         .pass { color: #4caf50; font-weight: bold; }
         .fail { color: #f44336; font-weight: bold; }
+        small { color: #aaa; }
         .diff-section { margin-bottom: 4rem; }
         .images { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
         .images img { width: 100%; border: 1px solid #333; }
@@ -198,7 +303,7 @@ def generate_report(results, out_path)
           #{summary_rows}
         </tbody>
       </table>
-      #{detail_sections.empty? ? '<p style="color:#4caf50">No regressions detected.</p>' : detail_sections}
+      #{detail_sections.empty? && results.none? { |r| r[:failed] } ? '<p style="color:#4caf50">No regressions detected.</p>' : detail_sections}
     </body>
     </html>
   HTML
@@ -209,14 +314,16 @@ end
 
 # ── Screenshot-only report ────────────────────────────────────────────────────
 
-def generate_screenshot_report(pages, screenshots_dir, out_path)
+def generate_screenshot_report(pages, screenshots_dir, out_path, outcomes = {})
   rows = pages.map do |page|
     path = File.join(screenshots_dir, page[:filename])
     src  = embed_image(path)
+    note = capture_notes(outcomes[page[:url]]).join(' · ')
+    body = outcomes.dig(page[:url], :status) == :failed ? '<p style="color:#f44336">Could not capture</p>' : %(<img src="#{src}">)
     <<~HTML
       <section class="page-section">
-        <h2>#{page[:url]}</h2>
-        <img src="#{src}">
+        <h2>#{page[:url]}#{note.empty? ? '' : " — #{note}"}</h2>
+        #{body}
       </section>
     HTML
   end.join("\n")
@@ -259,21 +366,23 @@ if SCREENSHOT_ONLY
 
   current_pages = discover_pages(PROJECT_DIR)
   log "Found #{current_pages.size} pages"
+  current_pages = with_samples(current_pages, sample_pages(sample_config(PROJECT_DIR), [PROJECT_DIR]))
 
   current_pid = start_server(3000, dir: PROJECT_DIR)
   browser = new_browser
   begin
-    screenshot_pages(current_pages, 'http://localhost:3000', "#{TMP_BASE}/current", browser)
+    outcomes = screenshot_pages(current_pages, 'http://localhost:3000', "#{TMP_BASE}/current", browser)
   ensure
     browser.quit
     kill_server(current_pid)
   end
 
   report_path = "#{TMP_BASE}/report.html"
-  generate_screenshot_report(current_pages, "#{TMP_BASE}/current", report_path)
+  generate_screenshot_report(current_pages, "#{TMP_BASE}/current", report_path, outcomes)
   open_report(report_path)
-  log "Done — #{current_pages.size} pages screenshotted"
-  exit 0
+  failed = outcomes.count { |_, o| o[:status] == :failed }
+  log "Done — #{current_pages.size - failed}/#{current_pages.size} pages screenshotted"
+  exit(failed > 0 ? 1 : 0)
 end
 
 FileUtils.mkdir_p(["#{TMP_BASE}/release", "#{TMP_BASE}/current", "#{TMP_BASE}/diffs"])
@@ -287,13 +396,24 @@ run! "rbenv local #{ruby_version}", dir: WORKTREE
 run! 'bundle install', dir: WORKTREE
 run! 'bundle exec nanoc compile', dir: WORKTREE
 
+# Compile current too before screenshotting, so sampled detail pages can be
+# chosen from the slugs present in both builds.
+log 'Compiling current branch'
+run! 'bundle exec nanoc compile'
+
 release_pages = discover_pages(WORKTREE)
 log "Found #{release_pages.size} pages in release"
+current_pages = discover_pages(PROJECT_DIR)
+log "Found #{current_pages.size} pages in current"
+
+samples       = sample_pages(sample_config(PROJECT_DIR), [WORKTREE, PROJECT_DIR])
+release_pages = with_samples(release_pages, samples)
+current_pages = with_samples(current_pages, samples)
 
 release_pid = start_server(3001, dir: WORKTREE)
 browser = new_browser
 begin
-  screenshot_pages(release_pages, 'http://localhost:3001', "#{TMP_BASE}/release", browser)
+  release_outcomes = screenshot_pages(release_pages, 'http://localhost:3001', "#{TMP_BASE}/release", browser)
 ensure
   browser.quit
   kill_server(release_pid)
@@ -301,16 +421,10 @@ ensure
 end
 
 # -- Current branch
-log 'Compiling current branch'
-run! 'bundle exec nanoc compile'
-
-current_pages = discover_pages(PROJECT_DIR)
-log "Found #{current_pages.size} pages in current"
-
 current_pid = start_server(3000, dir: PROJECT_DIR)
 browser = new_browser
 begin
-  screenshot_pages(current_pages, 'http://localhost:3000', "#{TMP_BASE}/current", browser)
+  current_outcomes = screenshot_pages(current_pages, 'http://localhost:3000', "#{TMP_BASE}/current", browser)
 ensure
   browser.quit
   kill_server(current_pid)
@@ -329,6 +443,15 @@ results = all_filenames.map do |filename|
         release_pages.find { |p| p[:filename] == filename }&.dig(:url) ||
         filename
 
+  outcomes = { release: release_outcomes[url], current: current_outcomes[url] }
+  notes = outcomes.flat_map { |side, o| capture_notes(o).map { |n| "#{side}: #{n}" } }
+  paths = { current_path: current_path, release_path: release_path, diff_path: diff_path }
+
+  if outcomes.values.any? { |o| o&.dig(:status) == :failed }
+    next { url: url, filename: filename, pct: 0.0, flagged: true, failed: true,
+           ae: 0, total: 0, notes: notes, **paths }
+  end
+
   unless File.exist?(current_path) && File.exist?(release_path)
     next { url: url, filename: filename, pct: 100.0, flagged: true,
            ae: 0, total: 0, current_path: current_path,
@@ -336,8 +459,7 @@ results = all_filenames.map do |filename|
   end
 
   compare_images(current_path, release_path, diff_path)
-    .merge(url: url, filename: filename, current_path: current_path,
-           release_path: release_path, diff_path: diff_path)
+    .merge(url: url, filename: filename, notes: notes, **paths)
 end
 
 report_path = "#{TMP_BASE}/report.html"
@@ -345,5 +467,6 @@ generate_report(results, report_path)
 open_report(report_path)
 
 flagged = results.count { |r| r[:flagged] }
-log "Done — #{flagged}/#{results.size} pages flagged"
+failed  = results.count { |r| r[:failed] }
+log "Done — #{flagged}/#{results.size} pages flagged#{failed > 0 ? " (#{failed} could not be captured)" : ''}"
 exit(flagged > 0 ? 1 : 0)
