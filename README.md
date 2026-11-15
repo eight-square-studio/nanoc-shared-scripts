@@ -169,7 +169,7 @@ Production reads from `production:` block if present, falls back to top-level ke
 ### check-layouts.sh — visual regression comparison
 
 Compares full-page screenshots of every published page between your current branch
-and `release`. Highlights pixel-level differences and labels each page with a status.
+and the live `origin/release` (the baseline). Highlights pixel-level differences and labels each page with a status.
 
 ```bash
 ./check-layouts.sh                 # full compare: current vs release
@@ -192,8 +192,8 @@ Report opens automatically in your browser on completion.
 | Status | Meaning |
 |--------|---------|
 | `failed` | Could not be captured (timeout, browser error, HTTP 4xx/5xx) |
-| `new` | In current but not in `release` — nothing to compare, shown as "new, no baseline" |
-| `removed` | In `release` but not in current |
+| `new` | In current but not in the baseline — nothing to compare, shown as "new, no baseline" |
+| `removed` | In the baseline but not in current |
 | `changed` | More than the threshold (default 1.0%) of pixels differ |
 | `unchanged` | At or below the threshold |
 
@@ -207,9 +207,19 @@ The last line reads e.g. `Done — 0 failed, 36 new, 10 changed, 0 unchanged of 
 | `1` | Any `failed` page, or a setup/compile/worktree error |
 | `2` | Only with `--strict` (or `LAYOUT_STRICT=1`): one or more `changed`/`removed` pages not listed as expected. `new` pages never fail |
 
+**Baseline:** the script runs `git fetch origin release` and checks `origin/release` out into a
+detached worktree, so it compares against what is actually deployed — never against a local
+`release` branch that may be stale. The baseline commit (short hash + subject) is logged at the
+start (`Baseline: origin/release @ abc1234 …`) and shown in `report.html`. If the fetch fails
+(offline, no `origin`) it falls back to the local branch of the same name and logs a warning
+that the baseline may be stale (also in the report). Override the ref with `screenshot_baseline`
+in `nanoc.yaml` or the `SCREENSHOT_BASELINE` env var (env wins), e.g. `origin/main`; a ref
+without a remote prefix (a local branch, tag or SHA) is used as-is with no fetch.
+
 **Config (optional, in `nanoc.yaml`):**
 
 ```yaml
+screenshot_baseline: origin/release             # default
 screenshot_threshold: 1.0                       # % of pixels changed before a page counts as `changed`
 screenshot_expected_changes: [/, /privacy/]     # shown as `changed (expected)`; never trip --strict
 ```

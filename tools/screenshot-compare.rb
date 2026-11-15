@@ -7,6 +7,7 @@ require 'open3'
 require 'socket'
 require 'base64'
 require 'yaml'
+require 'timeout'
 
 PROJECT_DIR     = ENV.fetch('PROJECT_DIR') { abort 'PROJECT_DIR env var not set — run via check-layouts.sh' }
 TMP_BASE        = File.join(PROJECT_DIR, 'tmp', 'screenshots')
@@ -85,6 +86,61 @@ rescue Errno::ESRCH, Errno::ECHILD
   # already gone
 end
 
+# ── Baseline worktree ─────────────────────────────────────────────────────────
+
+def git_capture(*args, dir: PROJECT_DIR, timeout: 60)
+  out = +''
+  status = nil
+  Timeout.timeout(timeout) do
+    out, status = Open3.capture2e({ 'GIT_TERMINAL_PROMPT' => '0' }, 'git', *args, chdir: dir)
+  end
+  [out.strip, status.success?]
+rescue Timeout::Error
+  ['timed out', false]
+end
+
+# Picks the ref to check out. A `<remote>/<branch>` ref is fetched first so the baseline is
+# what is really on the remote (deploys push to origin/release; the local branch is never
+# updated). If the fetch fails (offline, no remote) falls back to the local branch of the
+# same name with a warning. Returns [ref, stale_note_or_nil].
+def resolve_baseline(ref)
+  remotes = git_capture('remote').first.split
+  remote, branch = ref.split('/', 2)
+  return [ref, nil] unless branch && remotes.include?(remote)
+
+  log "Fetching #{ref}"
+  out, ok = git_capture('fetch', remote, "+refs/heads/#{branch}:refs/remotes/#{remote}/#{branch}")
+  return [ref, nil] if ok
+
+  reason = (out.lines.find { |l| l.start_with?('fatal:', 'error:') } || out.lines.first).to_s.strip
+  _, local_ok = git_capture('rev-parse', '--verify', '--quiet', "refs/heads/#{branch}")
+  if local_ok
+    note = "could not fetch #{ref} (#{reason}) — using LOCAL branch '#{branch}', the baseline may be stale"
+    log "⚠ #{note}"
+    return [branch, note]
+  end
+  _, tracking_ok = git_capture('rev-parse', '--verify', '--quiet', "refs/remotes/#{ref}")
+  abort "✗ could not fetch #{ref} (#{reason}) and there is no local '#{branch}' or cached #{ref} to fall back to" unless tracking_ok
+  note = "could not fetch #{ref} (#{reason}) — using cached #{ref}, the baseline may be stale"
+  log "⚠ #{note}"
+  [ref, note]
+end
+
+# Detached checkout of the baseline, independent of any local branch. Returns a description.
+def create_baseline_worktree(ref)
+  checkout_ref, stale_note = resolve_baseline(ref)
+  system("git worktree remove #{WORKTREE} --force 2>/dev/null", chdir: PROJECT_DIR)
+  FileUtils.rm_rf(WORKTREE)
+  system('git worktree prune', chdir: PROJECT_DIR)
+  run! "git worktree add --detach #{WORKTREE} #{checkout_ref}"
+  run! 'git submodule update --init --recursive', dir: WORKTREE
+  commit = `git -C "#{WORKTREE}" log -1 --format='%h %s'`.strip
+  desc = "#{checkout_ref == ref ? ref : "#{checkout_ref} (requested #{ref})"} @ #{commit}"
+  desc += " — ⚠ #{stale_note}" if stale_note
+  log "Baseline: #{desc}"
+  desc
+end
+
 # ── Page discovery ────────────────────────────────────────────────────────────
 
 def discover_pages(project_dir)
@@ -114,6 +170,7 @@ def url_to_filename(url)
 end
 
 # ── Project config (nanoc.yaml) ───────────────────────────────────────────────
+#   screenshot_baseline: origin/release    # ref to compare against (env SCREENSHOT_BASELINE overrides)
 #   screenshot_threshold: 1.0              # % of changed pixels above which a page is `changed`
 #   screenshot_expected_changes: [/, /privacy/]   # reported as `changed (expected)`, never trip --strict
 #   screenshot_samples:                    # pages generated into output/ after compile
@@ -169,6 +226,9 @@ end
 THRESHOLD        = threshold_config(PROJECT_CONFIG)
 EXPECTED_CHANGES = expected_changes_config(PROJECT_CONFIG)
 STRICT           = ENV['LAYOUT_STRICT'] == '1'
+# Ref the current build is compared against (env wins over nanoc.yaml `screenshot_baseline`).
+BASELINE_REF     = (ENV['SCREENSHOT_BASELINE'].to_s.strip.then { |v| v.empty? ? nil : v } ||
+                    PROJECT_CONFIG['screenshot_baseline'] || 'origin/release').to_s
 
 # ── Sampled generated pages ───────────────────────────────────────────────────
 # Pages written into output/ after compile (not nanoc items) are invisible to
@@ -335,7 +395,7 @@ end
 
 def pct_text(r) = r[:pct] ? "#{r[:pct]}%" : (r[:status] == :new ? 'new, no baseline' : '—')
 
-def generate_report(results, out_path)
+def generate_report(results, out_path, baseline_desc = nil)
   rows = sort_results(results)
 
   summary_rows = rows.map do |r|
@@ -347,9 +407,9 @@ def generate_report(results, out_path)
   detail_sections = rows.filter_map do |r|
     figures = case r[:status]
               when :changed
-                [['Release (baseline)', r[:release_path]], ['Current', r[:current_path]], ['Diff', r[:diff_path]]]
+                [['Baseline', r[:release_path]], ['Current', r[:current_path]], ['Diff', r[:diff_path]]]
               when :new     then [['Current (new — no baseline)', r[:current_path]]]
-              when :removed then [['Release (page no longer exists)', r[:release_path]]]
+              when :removed then [['Baseline (page no longer exists)', r[:release_path]]]
               end
     next unless figures
     heading = r[:status] == :changed ? "#{r[:url]} — #{r[:pct]}% changed" : "#{r[:url]} — #{r[:status]}"
@@ -387,7 +447,7 @@ def generate_report(results, out_path)
     </head>
     <body>
       <h1>Layout Comparison — #{Time.now.strftime('%Y-%m-%d %H:%M')}</h1>
-      <p class="summary">#{summary_line(results)} · changed threshold #{THRESHOLD}%</p>
+      <p class="summary">#{summary_line(results)} · changed threshold #{THRESHOLD}%#{baseline_desc ? "<br>Baseline: #{baseline_desc}" : ''}</p>
       <table>
         <thead><tr><th>Page</th><th>Change</th><th>Status</th></tr></thead>
         <tbody>
@@ -479,10 +539,8 @@ end
 FileUtils.mkdir_p(["#{TMP_BASE}/release", "#{TMP_BASE}/current", "#{TMP_BASE}/diffs"])
 
 # -- Release worktree
-log 'Setting up release worktree'
-system("git worktree remove #{WORKTREE} --force 2>/dev/null")
-run! "git worktree add #{WORKTREE} release"
-run! 'git submodule update --init --recursive', dir: WORKTREE
+log 'Setting up baseline worktree'
+baseline_desc = create_baseline_worktree(BASELINE_REF)
 ruby_version = File.read(File.join(WORKTREE, '.ruby-version')).strip
 run! "rbenv local #{ruby_version}", dir: WORKTREE
 run! 'bundle install', dir: WORKTREE
@@ -494,7 +552,7 @@ log 'Compiling current branch'
 run! 'bundle exec nanoc compile'
 
 release_pages = discover_pages(WORKTREE)
-log "Found #{release_pages.size} pages in release"
+log "Found #{release_pages.size} pages in baseline"
 current_pages = discover_pages(PROJECT_DIR)
 log "Found #{current_pages.size} pages in current"
 
@@ -553,7 +611,7 @@ results = all_pages.map do |page|
 end
 
 report_path = "#{TMP_BASE}/report.html"
-generate_report(results, report_path)
+generate_report(results, report_path, baseline_desc)
 open_report(report_path)
 
 sort_results(results).each do |r|
