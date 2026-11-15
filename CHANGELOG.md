@@ -2,6 +2,7 @@
 
 ## 2026-11-15
 
+- `coder.sh`: remove stray trailing `claude rc --set-folder=…` line (hardcoded home path) and fix the copy-pasted header comment
 - Docs: README now covers `coder.sh`, `setup.sh` and `fix-content-type.sh` (flags, prerequisites, not symlinked by `validate.sh`); `CLAUDE.md` repo structure lists them
 - Fix `check-layouts.sh` comparing against a stale baseline — it checked out the consumer's LOCAL `release` branch, which nothing updates (deploys push to `origin/release`), so in practice the baseline could be hundreds of commits behind what is live (missing pages showed as `new`/100% changed, and generated detail pages were absent). It now runs `git fetch origin release` and creates the worktree detached from `origin/release`. If the fetch fails it falls back to the local branch with a stale-baseline warning
 - `check-layouts.sh`: baseline ref configurable via `screenshot_baseline` in `nanoc.yaml` or `SCREENSHOT_BASELINE` env var (default `origin/release`). The exact baseline commit (short hash + subject) is logged at the start and shown in `report.html`
