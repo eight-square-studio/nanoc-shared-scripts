@@ -40,6 +40,10 @@ lib/
 tools/
   screenshot-compare.rb      # Ruby script called by check-layouts.sh
   deploy-batches.rb          # Stdlib-only Ruby helper called by deploy.sh (manifest, stage, invalidate, delete)
+test/
+  deploy_batches_test.rb     # Minitest unit tests for tools/deploy-batches.rb
+  deploy/run.sh              # End-to-end deploy.sh scenarios against a fake aws + throwaway git repo
+  deploy/fake-aws            # Fake `aws` CLI (local dir as bucket) used by run.sh
 templates/
   deploy.yml                 # Full workflow — copied into consumer projects by validate.sh
   Gemfile                    # Baseline Gemfile — copied into project root if missing
@@ -162,6 +166,23 @@ explicit `public` before the next method — this file must always end in the
 `public` state, or every method defined in files loaded afterward (including
 the consumer's own `lib/helpers.rb`) silently becomes private, breaking Haml
 template calls with `NoMethodError: private method`.
+
+---
+
+## Tests
+
+```bash
+ruby test/deploy_batches_test.rb   # unit tests for tools/deploy-batches.rb
+bash test/deploy/run.sh            # deploy.sh end to end (production + staging) against a fake aws
+```
+
+CI (`.github/workflows/test.yml`) runs both on ubuntu and macOS for every PR. `run.sh` builds a
+temp git repo with a bare remote, puts `test/deploy/fake-aws` first on `PATH`, and asserts on
+exit codes, bucket contents, `.deployed`, tags and invalidation payloads. The fake mimics the
+`aws` output formats `deploy.sh` parses (`upload:` lines, `delete-objects` JSON) — it can't prove
+the real CLI still behaves that way, so after changing how `deploy.sh` calls `aws`, also do a
+real `--dry-run` and a deploy to a test bucket. Add a scenario to `run.sh` for any new failure
+path (use `FAIL_MATCH` / `FAIL_DELETE` to inject errors).
 
 ---
 

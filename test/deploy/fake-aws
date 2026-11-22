@@ -1,0 +1,85 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Fake `aws` CLI for test/deploy/run.sh. A local directory ($FAKE_BUCKET) stands
+# in for the S3 bucket. It only implements the calls deploy.sh makes and mimics
+# the CLI output formats deploy.sh parses — it cannot prove the real CLI behaves
+# the same way.
+#
+#   FAKE_BUCKET   directory used as the bucket
+#   FAKE_LOG      every invocation is appended here
+#   FAKE_CF       each --invalidation-batch payload is appended here
+#   FAIL_MATCH    `s3 cp` fails for any key containing this string
+#   FAIL_DELETE   `delete-objects` reports an error for any key containing this string
+
+require 'fileutils'
+require 'json'
+
+bucket_dir = ENV.fetch('FAKE_BUCKET')
+File.open(ENV.fetch('FAKE_LOG'), 'a') { |f| f.puts ARGV.join(' ') }
+
+def opt(args, name)
+  i = args.index(name)
+  i && args[i + 1]
+end
+
+def files_under(dir)
+  Dir.glob('**/*', File::FNM_DOTMATCH, base: dir).sort.select { |rel| File.file?(File.join(dir, rel)) }
+end
+
+def matches?(env_name, key)
+  pattern = ENV[env_name]
+  !pattern.nil? && !pattern.empty? && key.include?(pattern)
+end
+
+case ARGV[0..1]
+when %w[sts get-caller-identity]
+  exit 0
+when %w[s3 cp]
+  src = ARGV[2].chomp('/')
+  bucket = ARGV[3][%r{\As3://([^/]+)}, 1]
+  rc = 0
+  files_under(src).each do |rel|
+    if matches?('FAIL_MATCH', rel)
+      warn "upload failed: #{src}/#{rel} to s3://#{bucket}/#{rel} An error occurred (AccessDenied)"
+      rc = 1
+      next
+    end
+    dest = File.join(bucket_dir, rel)
+    FileUtils.mkdir_p(File.dirname(dest))
+    FileUtils.cp(File.join(src, rel), dest)
+    puts "upload: #{src}/#{rel} to s3://#{bucket}/#{rel}"
+  end
+  exit rc
+when %w[s3 sync]
+  src = ARGV[2].chomp('/')
+  FileUtils.rm_rf(bucket_dir)
+  files_under(src).each do |rel|
+    dest = File.join(bucket_dir, rel)
+    FileUtils.mkdir_p(File.dirname(dest))
+    FileUtils.cp(File.join(src, rel), dest)
+  end
+  exit 0
+when %w[s3api delete-objects]
+  payload = JSON.parse(opt(ARGV, '--delete'))
+  deleted = []
+  errors = []
+  payload['Objects'].each do |o|
+    key = o['Key']
+    if matches?('FAIL_DELETE', key)
+      errors << { 'Key' => key, 'Code' => 'AccessDenied', 'Message' => 'Access Denied' }
+    else
+      FileUtils.rm_f(File.join(bucket_dir, key))
+      deleted << { 'Key' => key }
+    end
+  end
+  puts JSON.generate('Deleted' => deleted, 'Errors' => errors)
+  exit 0
+when %w[cloudfront create-invalidation]
+  File.open(ENV.fetch('FAKE_CF'), 'a') { |f| f.puts opt(ARGV, '--invalidation-batch') }
+  puts "I#{rand(100_000)}"
+  exit 0
+else
+  warn "fake aws: unhandled call: #{ARGV.join(' ')}"
+  exit 9
+end
