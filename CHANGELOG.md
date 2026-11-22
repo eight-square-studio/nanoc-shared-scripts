@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-22
+
+- Tests: `test/deploy_batches_test.rb` (Minitest, `tools/deploy-batches.rb`) and `test/deploy/run.sh` (`deploy.sh` end to end against a fake `aws`: first/no-change/mixed deploys, partial upload and delete failures with retry, grouping and the 3000-path split, `--dry-run`, staging). New `.github/workflows/test.yml` runs both on ubuntu and macOS for every PR
+- `deploy.sh` (production): batched, much faster deploys. `output/` is hashed once (not twice, and not one process per file); changed files upload in one parallel `aws s3 cp --recursive` instead of one `aws s3 cp` per file; removals use `aws s3api delete-objects` (1000 per request) instead of one `aws s3 rm` each; `.deployed` is written once instead of being rewritten and re-sorted per file. `.deployed` format, release commit/tag/push, `--deploy-only` and `--staging` are unchanged
+- `deploy.sh`: CloudFront invalidations are grouped — `foo/index.html` invalidates `/foo/*` and `/foo`, a directory with many changed files collapses to `/dir/*`, and over-large sets fall back to `/*`. Requests are split at CloudFront's 3000-path limit, paths are percent-encoded and the JSON is generated properly (filenames with spaces/quotes/non-ASCII previously broke the request). New optional `nanoc.yaml` keys `cloudfront_group_threshold` (default 10) and `cloudfront_invalidate_all_threshold` (default 1000)
+- `deploy.sh`: fix failed uploads being recorded as deployed — `.deployed` was regenerated from all of `output/` regardless of upload errors, so a failed file was never retried. Now only confirmed uploads/deletes are recorded; if anything fails the script invalidates what succeeded, skips the `.deployed` commit and release tag, and exits `1`. If the asset upload fails, HTML is not uploaded
+- `deploy.sh`: assets (everything but `*.html`) upload before HTML so pages never go live ahead of what they reference
+- `deploy.sh --dry-run` (production only): prints what would be uploaded, deleted and invalidated without touching S3, CloudFront, `.deployed` or git
+- New `tools/deploy-batches.rb` (stdlib-only Ruby: manifest hashing, staging, invalidation grouping, delete batching). Production deploys now need `ruby` on the `PATH`
+
 ## 2026-11-15
 
 - `coder.sh`: remove stray trailing `claude rc --set-folder=…` line (hardcoded home path) and fix the copy-pasted header comment

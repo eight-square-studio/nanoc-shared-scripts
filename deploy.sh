@@ -9,6 +9,9 @@ _s="${BASH_SOURCE[0]}"
 while [[ -L "$_s" ]]; do _d="$(cd "$(dirname "$_s")" && pwd)"; _s="$(readlink "$_s")"; [[ "$_s" != /* ]] && _s="$_d/$_s"; done
 source "$(cd "$(dirname "$_s")" && pwd)/lib/_shared.sh"
 source "$(cd "$(dirname "$_s")" && pwd)/lib/deploy_helpers.sh"
+BATCH_TOOL="$(cd "$(dirname "$_s")" && pwd)/tools/deploy-batches.rb"
+DEPLOY_TMP=""
+trap cleanup_deploy_tmp EXIT
 
 if [[ ! -f "nanoc.yaml" ]]; then
     echo "Error: must be run from the project root (nanoc.yaml not found)"
@@ -109,121 +112,94 @@ function check_aws_auth() {
     fi
 }
 
-function generate_file_hashes() {
-    local output_dir="${current_dir}/output"
-    if [[ ! -d "$output_dir" ]]; then
-        echo ""
-        return
-    fi
-    find "$output_dir" -type f ! -name '.*' -print0 \
-        | while IFS= read -r -d '' file; do sha256_file "$file"; done \
-        | sed "s|  ${output_dir}/|  |" \
-        | LC_ALL=C sort
+function cleanup_deploy_tmp() {
+    [[ -n "${DEPLOY_TMP:-}" && -d "$DEPLOY_TMP" ]] && rm -rf "$DEPLOY_TMP"
+    return 0
 }
 
-function save_deployment_hashes() {
-    local deployed_file="${current_dir}/.deployed"
-    echo -e "${PASS} Saving file hashes to .deployed..."
-    generate_file_hashes > "$deployed_file"
-}
-
-function update_hash_in_deployed() {
-    local relative_path="$1"
-    local deployed_file="${current_dir}/.deployed"
-    local output_dir="${current_dir}/output"
-    local new_hash
-    new_hash=$(sha256_file "${output_dir}/${relative_path}" | cut -d' ' -f1)
-    if [[ -f "$deployed_file" ]]; then
-        grep -v "  ${relative_path}$" "$deployed_file" > "${deployed_file}.tmp"
-        echo "${new_hash}  ${relative_path}" >> "${deployed_file}.tmp"
-        LC_ALL=C sort "${deployed_file}.tmp" -o "${deployed_file}.tmp"
-        mv "${deployed_file}.tmp" "$deployed_file"
-    else
-        echo "${new_hash}  ${relative_path}" > "$deployed_file"
+function check_for_batch_tool() {
+    if ! command -v ruby &> /dev/null; then
+        echo -e "${FAIL} ruby not found — required by tools/deploy-batches.rb (hashing, batching)"
+        exit 4
     fi
 }
 
-function get_changed_files() {
-    local deployed_file="${current_dir}/.deployed"
-    local output_dir="${current_dir}/output"
-    local temp_file current_hashes previous_hashes
-    temp_file=$(mktemp)
-    current_hashes=$(mktemp)
-    previous_hashes=$(mktemp)
-    trap 'rm -f "$temp_file" "$current_hashes" "$previous_hashes"' RETURN
-    if [[ ! -f "$deployed_file" ]]; then
-        echo -e "${WARN} No previous deployment found. All files will be uploaded." >&2
-        find "$output_dir" -type f ! -name '.*' | sed "s|^$output_dir/||" | sort > "$temp_file"
-        cat "$temp_file"
-        return 0
-    fi
-    generate_file_hashes > "$current_hashes"
-    LC_ALL=C sort "$deployed_file" > "$previous_hashes"
-    comm -23 "$current_hashes" "$previous_hashes" | awk '{print $NF}' > "$temp_file"
-    cat "$temp_file"
+# Hash output/ once. Lines are "sha256  relative/path", LC_ALL=C sorted — the
+# same format as .deployed, so manifests can be diffed with comm.
+function build_manifest() {
+    ruby "$BATCH_TOOL" manifest --dir "${current_dir}/output" > "$1"
 }
 
-function get_deleted_files() {
-    local deployed_file="${current_dir}/.deployed"
-    local output_dir="${current_dir}/output"
-    [[ ! -f "$deployed_file" ]] && return 0
+# "sha256  path" lines on stdin -> bare paths on stdout
+function strip_hashes() {
+    sed 's/^[0-9a-f]\{64\}  //'
+}
+
+# Upload the keys listed in $2 under one `aws s3 cp --recursive` (parallel
+# transfers). Successful keys are appended to $DEPLOY_TMP/uploaded.txt.
+# Returns non-zero if anything failed.
+function upload_batch() {
+    local s3_bucket="$1" list="$2" label="$3"
+    [[ -s "$list" ]] || return 0
+    local stage="${DEPLOY_TMP}/stage-${label}"
+    local out="${DEPLOY_TMP}/upload-${label}.out" err="${DEPLOY_TMP}/upload-${label}.err"
+    local rc=0
+    mkdir -p "$stage"
+    ruby "$BATCH_TOOL" stage --src "${current_dir}/output" --dest "$stage" < "$list"
+    aws s3 cp "${stage}/" "s3://${s3_bucket}/" --recursive --no-progress > "$out" 2> "$err" < /dev/null || rc=$?
+    sed -n "s|^upload: .* to s3://${s3_bucket}/||p" "$out" >> "${DEPLOY_TMP}/uploaded.txt"
+    if [[ $rc -ne 0 ]]; then
+        sed 's/^/    /' "$err" >&2
+    fi
+    return $rc
+}
+
+# Delete the keys in $1 from S3 in batches of up to 1000.
+# Keys S3 confirms are appended to $DEPLOY_TMP/deleted_ok.txt.
+function delete_batch() {
+    local s3_bucket="$1" list="$2"
+    local rc=0 line response
+    ruby "$BATCH_TOOL" delete < "$list" > "${DEPLOY_TMP}/delete-batches.jsonl"
     while IFS= read -r line; do
-        local relative_path
-        relative_path=$(echo "$line" | awk '{print $NF}')
-        [[ ! -f "${output_dir}/${relative_path}" ]] && echo "$relative_path"
-    done < "$deployed_file"
+        response=$(aws s3api delete-objects --bucket "$s3_bucket" --delete "$line" --output json < /dev/null) || rc=1
+        printf '%s' "$response" | ruby "$BATCH_TOOL" delete-result >> "${DEPLOY_TMP}/deleted_ok.txt" || rc=1
+    done < "${DEPLOY_TMP}/delete-batches.jsonl"
+    return $rc
 }
 
-function remove_from_deployed() {
-    local relative_path="$1"
+function plan_invalidation_paths() {
+    ruby "$BATCH_TOOL" invalidate --group-threshold "$CF_GROUP_THRESHOLD" \
+        --all-threshold "$CF_INVALIDATE_ALL_THRESHOLD" --list < "$1"
+}
+
+function invalidate_cloudfront() {
+    local affected="$1"
+    local batches="${DEPLOY_TMP}/invalidations.jsonl"
+    local path_count request_count line
+    path_count=$(plan_invalidation_paths "$affected" | wc -l | tr -d ' ')
+    ruby "$BATCH_TOOL" invalidate --group-threshold "$CF_GROUP_THRESHOLD" \
+        --all-threshold "$CF_INVALIDATE_ALL_THRESHOLD" --ref "$(date +%s)-$$" < "$affected" > "$batches"
+    request_count=$(wc -l < "$batches" | tr -d ' ')
+    echo -e "${PASS} Invalidating ${path_count} CloudFront path(s) in ${request_count} request(s) on ${CF_DIST_ID}..."
+    while IFS= read -r line; do
+        aws cloudfront create-invalidation \
+            --distribution-id "$CF_DIST_ID" \
+            --invalidation-batch "$line" \
+            --query 'Invalidation.Id' --output text --no-cli-pager < /dev/null \
+            | sed "s/^/    invalidation /"
+    done < "$batches"
+}
+
+# Rewrite .deployed from the manifest we just hashed. Files whose upload (or
+# delete) failed keep their PREVIOUS entry (or none, if new) so the next run
+# retries them instead of treating them as deployed.
+function write_deployed_file() {
+    local keep="${DEPLOY_TMP}/keep-previous.txt"
     local deployed_file="${current_dir}/.deployed"
-    [[ ! -f "$deployed_file" ]] && return 0
-    grep -v "  ${relative_path}$" "$deployed_file" > "${deployed_file}.tmp"
-    mv "${deployed_file}.tmp" "$deployed_file"
-}
-
-function delete_removed_files() {
-    local s3_bucket="$1"
-    local deleted_files
-    deleted_files=$(get_deleted_files)
-    [[ -z "$deleted_files" ]] && return 0
-    local file_count
-    file_count=$(echo "$deleted_files" | wc -l | tr -d ' ')
-    echo -e "${WARN} Found ${file_count} file(s) removed from output — deleting from S3..." >&2
-    echo "$deleted_files" | while read -r file; do
-        if aws s3 rm "s3://${s3_bucket}/${file}" --quiet; then
-            echo -e "${PASS} Deleted from S3: $file" >&2
-            remove_from_deployed "$file"
-            echo "$file"
-        else
-            echo -e "${FAIL} Failed to delete from S3: $file" >&2
-        fi
-    done
-}
-
-function deploy_with_hash_check() {
-    local s3_bucket="$1"
-    local output_dir="${current_dir}/output"
-    local changed_files
-    changed_files=$(get_changed_files)
-    if [[ -z "$changed_files" ]]; then
-        echo -e "${PASS} No files have changed since last deployment" >&2
-        return 0
-    fi
-    local file_count
-    file_count=$(echo "$changed_files" | wc -l | tr -d ' ')
-    echo -e "${PASS} Found ${file_count} file(s) to deploy" >&2
-    echo "$changed_files" | while read -r file; do
-        if [[ -f "$output_dir/$file" ]]; then
-            if aws s3 cp "$output_dir/$file" "s3://${s3_bucket}/${file}" --quiet; then
-                echo -e "${PASS} Uploaded: $file" >&2
-                update_hash_in_deployed "$file"
-                echo "$file"
-            else
-                echo -e "${FAIL} Failed to upload: $file" >&2
-            fi
-        fi
-    done
+    {
+        awk -v keep="$keep" 'BEGIN{while ((getline l < keep) > 0) bad[l]=1} {if (!(substr($0,67) in bad)) print}' "${DEPLOY_TMP}/current.manifest"
+        awk -v keep="$keep" 'BEGIN{while ((getline l < keep) > 0) bad[l]=1} {if (substr($0,67) in bad) print}' "${DEPLOY_TMP}/previous.manifest"
+    } | LC_ALL=C sort > "$deployed_file"
 }
 
 function commit_deployed_file() {
@@ -261,11 +237,12 @@ function create_release_tag() {
 }
 
 function print_help() {
-    echo -e "Usage: ./deploy.sh [--deploy-only] [--staging] [-h|--help]
+    echo -e "Usage: ./deploy.sh [--deploy-only] [--staging] [--dry-run] [-h|--help]
 
 Wipes output/, compiles the site, and deploys to S3 + CloudFront.
-Only uploads new/changed files (hash-based). Deletes removed files from S3.
-Commits .deployed and creates a release tag on success.
+Only uploads new/changed files (hash-based), in parallel batches. Deletes removed
+files from S3 in batches and invalidates the affected CloudFront paths in grouped
+requests. Commits .deployed and creates a release tag only if everything succeeded.
 
 Local:  checks/installs awscli, prompts for AWS auth if needed
 CI:     skips local setup, uses AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars
@@ -274,6 +251,8 @@ Options:
   --deploy-only  Skip Ruby setup and nanoc compile — deploy output/ as-is
   --staging      Deploy to staging environment (reads staging config from nanoc.yaml,
                  uses s3 sync, skips hash tracking / .deployed commit / release tag)
+  --dry-run      Production only: show what would be uploaded, deleted and invalidated,
+                 then exit without touching S3, CloudFront, .deployed or git
   -h, --help     Show this help message"
 }
 
@@ -281,6 +260,7 @@ Options:
 
 DEPLOY_ONLY=false
 STAGING=false
+DRY_RUN=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --deploy-only)
@@ -289,6 +269,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --staging)
             STAGING=true
+            shift
+            ;;
+        --dry-run)
+            DRY_RUN=true
             shift
             ;;
         -h|--help)
@@ -302,6 +286,11 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ "$DRY_RUN" == true && "$STAGING" == true ]]; then
+    echo -e "${FAIL} --dry-run is only supported for production deploys"
+    exit 1
+fi
 
 if [[ "$DEPLOY_ONLY" == false ]]; then
     rm -rf output/
@@ -317,9 +306,13 @@ else
     echo -e "${PASS} --deploy-only: skipping compile, deploying output/ as-is"
 fi
 
-check_for_awscli
+if [[ "$DRY_RUN" == false ]]; then
+    check_for_awscli
+fi
 read_deploy_config
-check_aws_auth
+if [[ "$DRY_RUN" == false ]]; then
+    check_aws_auth
+fi
 
 if [[ "$STAGING" == true ]]; then
     echo -e "${PASS} Deploying to s3://${S3_BUCKET}/ (staging — full sync)..."
@@ -336,25 +329,93 @@ if [[ "$STAGING" == true ]]; then
         --invalidation-batch "{\"Paths\":{\"Quantity\":1,\"Items\":[\"/*\"]},\"CallerReference\":\"$(date +%s)\"}" \
         --no-cli-pager
     echo -e "${PASS} Staging deploy complete"
-else
-    echo -e "${PASS} Deploying to s3://${S3_BUCKET}/ (hash-based)..."
-    CHANGED_FILES=$(deploy_with_hash_check "$S3_BUCKET")
-    DELETED_FILES=$(delete_removed_files "$S3_BUCKET")
-    ALL_AFFECTED=$(printf '%s\n' $CHANGED_FILES $DELETED_FILES | grep -v '^$')
+    exit 0
+fi
 
-    if [[ -n "$ALL_AFFECTED" ]]; then
-        echo -e "${PASS} Invalidating affected files on CloudFront distribution ${CF_DIST_ID}..."
-        CF_QUANTITY=$(echo "$ALL_AFFECTED" | wc -l | tr -d ' ')
-        CF_ITEMS=$(echo "$ALL_AFFECTED" | sed 's|^|"/|' | sed 's|$|"|' | tr '\n' ',' | sed 's/,$//')
-        aws cloudfront create-invalidation \
-            --distribution-id "$CF_DIST_ID" \
-            --invalidation-batch "{\"Paths\":{\"Quantity\":${CF_QUANTITY},\"Items\":[${CF_ITEMS}]},\"CallerReference\":\"$(date +%s)\"}" \
-            --no-cli-pager
-        save_deployment_hashes
-        commit_deployed_file
-        create_release_tag
+# --- Production: hash-based batched deploy ---
+check_for_batch_tool
+DEPLOY_TMP=$(mktemp -d "${current_dir}/.deploy-tmp.XXXXXX")
+deployed_file="${current_dir}/.deployed"
+export LC_ALL=C   # comm/sort/awk must agree on bytewise ordering
+
+echo -e "${PASS} Deploying to s3://${S3_BUCKET}/ (hash-based, batched)..."
+phase_start=$SECONDS
+build_manifest "${DEPLOY_TMP}/current.manifest"
+if [[ -f "$deployed_file" ]]; then
+    sort "$deployed_file" > "${DEPLOY_TMP}/previous.manifest"
+else
+    echo -e "${WARN} No previous deployment found. All files will be uploaded."
+    : > "${DEPLOY_TMP}/previous.manifest"
+fi
+
+# changed = new or different hash; deleted = path in the previous manifest only
+comm -23 "${DEPLOY_TMP}/current.manifest" "${DEPLOY_TMP}/previous.manifest" | strip_hashes | sort > "${DEPLOY_TMP}/changed.txt"
+strip_hashes < "${DEPLOY_TMP}/current.manifest" | sort > "${DEPLOY_TMP}/current.paths"
+strip_hashes < "${DEPLOY_TMP}/previous.manifest" | sort > "${DEPLOY_TMP}/previous.paths"
+comm -13 "${DEPLOY_TMP}/current.paths" "${DEPLOY_TMP}/previous.paths" > "${DEPLOY_TMP}/deleted.txt"
+
+changed_count=$(wc -l < "${DEPLOY_TMP}/changed.txt" | tr -d ' ')
+deleted_count=$(wc -l < "${DEPLOY_TMP}/deleted.txt" | tr -d ' ')
+echo -e "${PASS} Hashed output/ in $((SECONDS - phase_start))s: ${changed_count} changed, ${deleted_count} removed"
+
+if [[ "$DRY_RUN" == true ]]; then
+    cat "${DEPLOY_TMP}/changed.txt" "${DEPLOY_TMP}/deleted.txt" | sort -u > "${DEPLOY_TMP}/affected.txt"
+    if [[ -s "${DEPLOY_TMP}/affected.txt" ]]; then
+        echo -e "${PASS} --dry-run: would upload ${changed_count}, delete ${deleted_count}, and invalidate:"
+        plan_invalidation_paths "${DEPLOY_TMP}/affected.txt" | sed 's/^/    /'
     else
-        echo -e "${PASS} No files changed — nothing to deploy"
-        save_deployment_hashes
+        echo -e "${PASS} --dry-run: nothing to deploy"
     fi
+    exit 0
+fi
+
+: > "${DEPLOY_TMP}/uploaded.txt"
+: > "${DEPLOY_TMP}/deleted_ok.txt"
+upload_failed=false
+delete_failed=false
+
+if [[ "$changed_count" -gt 0 ]]; then
+    # Assets first, HTML last — a page never goes live ahead of what it references
+    grep -v '\.html$' "${DEPLOY_TMP}/changed.txt" > "${DEPLOY_TMP}/changed-assets.txt" || true
+    grep '\.html$' "${DEPLOY_TMP}/changed.txt" > "${DEPLOY_TMP}/changed-pages.txt" || true
+    phase_start=$SECONDS
+    echo -e "${PASS} Uploading ${changed_count} file(s)..."
+    upload_batch "$S3_BUCKET" "${DEPLOY_TMP}/changed-assets.txt" assets || upload_failed=true
+    if [[ "$upload_failed" == true ]]; then
+        echo -e "${FAIL} Asset upload failed — skipping HTML so pages don't go live ahead of their assets"
+    else
+        upload_batch "$S3_BUCKET" "${DEPLOY_TMP}/changed-pages.txt" pages || upload_failed=true
+    fi
+    sort -u -o "${DEPLOY_TMP}/uploaded.txt" "${DEPLOY_TMP}/uploaded.txt"
+    echo -e "${PASS} Uploaded $(wc -l < "${DEPLOY_TMP}/uploaded.txt" | tr -d ' ')/${changed_count} in $((SECONDS - phase_start))s"
+fi
+
+if [[ "$deleted_count" -gt 0 ]]; then
+    echo -e "${WARN} Found ${deleted_count} file(s) removed from output — deleting from S3..."
+    delete_batch "$S3_BUCKET" "${DEPLOY_TMP}/deleted.txt" || delete_failed=true
+    sort -u -o "${DEPLOY_TMP}/deleted_ok.txt" "${DEPLOY_TMP}/deleted_ok.txt"
+    echo -e "${PASS} Deleted $(wc -l < "${DEPLOY_TMP}/deleted_ok.txt" | tr -d ' ')/${deleted_count} from S3"
+fi
+
+# Anything not confirmed uploaded/deleted keeps its previous .deployed entry
+{ comm -23 "${DEPLOY_TMP}/changed.txt" "${DEPLOY_TMP}/uploaded.txt"
+  comm -23 "${DEPLOY_TMP}/deleted.txt" "${DEPLOY_TMP}/deleted_ok.txt"; } | sort -u > "${DEPLOY_TMP}/keep-previous.txt"
+
+cat "${DEPLOY_TMP}/uploaded.txt" "${DEPLOY_TMP}/deleted_ok.txt" | sort -u > "${DEPLOY_TMP}/affected.txt"
+if [[ -s "${DEPLOY_TMP}/affected.txt" ]]; then
+    invalidate_cloudfront "${DEPLOY_TMP}/affected.txt"
+else
+    echo -e "${PASS} No files changed — nothing to deploy"
+fi
+
+echo -e "${PASS} Saving file hashes to .deployed..."
+write_deployed_file
+
+if [[ -s "${DEPLOY_TMP}/keep-previous.txt" ]]; then
+    echo -e "${FAIL} $(wc -l < "${DEPLOY_TMP}/keep-previous.txt" | tr -d ' ') file(s) failed — .deployed not committed and no release tagged; re-run to retry them"
+    exit 1
+fi
+if [[ -s "${DEPLOY_TMP}/affected.txt" ]]; then
+    commit_deployed_file
+    create_release_tag
 fi

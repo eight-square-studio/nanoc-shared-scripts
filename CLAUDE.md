@@ -39,6 +39,11 @@ lib/
   shared_helpers.rb          # Shared Ruby/nanoc helpers — required from a consumer's lib/helpers.rb
 tools/
   screenshot-compare.rb      # Ruby script called by check-layouts.sh
+  deploy-batches.rb          # Stdlib-only Ruby helper called by deploy.sh (manifest, stage, invalidate, delete)
+test/
+  deploy_batches_test.rb     # Minitest unit tests for tools/deploy-batches.rb
+  deploy/run.sh              # End-to-end deploy.sh scenarios against a fake aws + throwaway git repo
+  deploy/fake-aws            # Fake `aws` CLI (local dir as bucket) used by run.sh
 templates/
   deploy.yml                 # Full workflow — copied into consumer projects by validate.sh
   Gemfile                    # Baseline Gemfile — copied into project root if missing
@@ -76,7 +81,7 @@ All scripts must be run from the project root; `deploy.sh` and `run.sh` enforce 
 
 ### lib/deploy_helpers.sh internals
 
-Sourced by `deploy.sh` (both `read_deploy_config()` and `set_s3_content_type()`
+Sourced by `deploy.sh` (`read_deploy_config()` — which also reads the optional integer keys `cloudfront_group_threshold` / `cloudfront_invalidate_all_threshold` via `_read_deploy_int` — and `set_s3_content_type()`
 were pulled out of `deploy.sh` so the standalone `fix-content-type.sh`
 script can reuse them without pulling in the rest of `deploy.sh`). Relies on
 `current_dir`, `AWS_REGION`, `STAGING`, and the `PASS`/`FAIL` colour constants
@@ -93,6 +98,15 @@ non-deploy keys (anything except `s3_bucket`, `cloudfront_distribution_id`,
 `aws_region`) from the `staging:` block and temporarily overwrites them at the
 top level of `nanoc.yaml` before `nanoc compile`. A `.pre-staging` backup is
 taken; `restore_nanoc_config()` restores it after compile (also on compile failure).
+
+**Production deploy (batched):** `deploy.sh` never loops `aws` per file.
+1. `deploy-batches.rb manifest` hashes `output/` once → `current.manifest` (`sha256␣␣relpath`, bytewise sorted — identical to `.deployed`; same file set as `find -type f ! -name '.*'`). `.deployed` is sorted into `previous.manifest`.
+2. `comm` (with `LC_ALL=C`, exported for the whole production phase) diffs them: `comm -23 current previous` = new/changed; `comm -13` on the path-only lists = deleted. Never use a locale-dependent sort here or `comm` silently misreports.
+3. Changed keys are split into non-HTML and HTML; each is hard-linked (copy fallback) into `$DEPLOY_TMP/stage-*` by `deploy-batches.rb stage` and uploaded with one `aws s3 cp --recursive --no-progress`. `cp --recursive` (not `sync`) because `sync` skips same-size files. Successful keys are parsed from the `upload:` lines. Assets go first; if they fail, HTML is skipped.
+4. Deletes: `deploy-batches.rb delete` emits ≤1000-key payloads; `delete-result` parses the response for confirmed keys.
+5. Invalidation: `deploy-batches.rb invalidate` (see `plan_invalidation`) groups keys → paths (`foo/index.html` → `/foo/*` + `/foo`; ≥ `cloudfront_group_threshold` in one dir → `/dir/*`; covered paths dropped; > `cloudfront_invalidate_all_threshold` → `/*`), percent-encodes, chunks at 3000, unique `CallerReference` per chunk. Only keys confirmed uploaded/deleted are invalidated.
+6. `write_deployed_file`: current manifest minus `keep-previous.txt` (failed uploads/deletes), plus those keys' previous entries. Failures → no commit/tag, exit 1. The awk uses `getline < file`, NOT the `FNR==NR` idiom (breaks when the first file is empty).
+7. Gotchas: every `aws`/`ruby` call inside a `while read` loop needs `< /dev/null` (or it eats the loop's stdin); all scratch files live in `$DEPLOY_TMP` (`.deploy-tmp.XXXXXX` in the project, removed by an EXIT trap); bash 3.2 compatible (no `mapfile`, no associative arrays).
 
 ### check-layouts.sh internals
 
@@ -152,6 +166,23 @@ explicit `public` before the next method — this file must always end in the
 `public` state, or every method defined in files loaded afterward (including
 the consumer's own `lib/helpers.rb`) silently becomes private, breaking Haml
 template calls with `NoMethodError: private method`.
+
+---
+
+## Tests
+
+```bash
+ruby test/deploy_batches_test.rb   # unit tests for tools/deploy-batches.rb
+bash test/deploy/run.sh            # deploy.sh end to end (production + staging) against a fake aws
+```
+
+CI (`.github/workflows/test.yml`) runs both on ubuntu and macOS for every PR. `run.sh` builds a
+temp git repo with a bare remote, puts `test/deploy/fake-aws` first on `PATH`, and asserts on
+exit codes, bucket contents, `.deployed`, tags and invalidation payloads. The fake mimics the
+`aws` output formats `deploy.sh` parses (`upload:` lines, `delete-objects` JSON) — it can't prove
+the real CLI still behaves that way, so after changing how `deploy.sh` calls `aws`, also do a
+real `--dry-run` and a deploy to a test bucket. Add a scenario to `run.sh` for any new failure
+path (use `FAIL_MATCH` / `FAIL_DELETE` to inject errors).
 
 ---
 

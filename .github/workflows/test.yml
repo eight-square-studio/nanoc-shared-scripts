@@ -1,0 +1,24 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-scripts:
+    name: deploy scripts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - name: Unit tests (tools/deploy-batches.rb)
+        run: ruby test/deploy_batches_test.rb
+      - name: End-to-end tests (deploy.sh against a fake aws)
+        run: bash test/deploy/run.sh

@@ -1,6 +1,25 @@
 #!/bin/bash
 # Common deployment helper functions for deploy.sh, fix-content-type.sh, and other deployment scripts
 
+# _read_deploy_int BLOCK KEY DEFAULT — integer value of KEY from the env block
+# (or top-level in nanoc.yaml when there is no block); DEFAULT when unset.
+function _read_deploy_int() {
+    local block="$1" key="$2" default="$3" value
+    if [[ -n "$block" ]]; then
+        value=$(echo "$block" | grep -E "^[[:space:]]*${key}:" | head -1 | awk '{print $2}' | tr -d '"')
+    else
+        value=$(grep -E "^${key}:" "$current_dir/nanoc.yaml" | head -1 | awk '{print $2}' | tr -d '"')
+    fi
+    if [[ -z "$value" ]]; then
+        echo "$default"
+    elif [[ "$value" =~ ^[0-9]+$ ]]; then
+        echo "$value"
+    else
+        echo -e "${FAIL} ${key} must be a whole number (got '${value}')" >&2
+        exit 5
+    fi
+}
+
 function read_deploy_config() {
     local config_file="$current_dir/nanoc.yaml"
     local env_label="production"
@@ -41,6 +60,10 @@ function read_deploy_config() {
     if [[ -n "$exclude_block" ]]; then
         S3_SYNC_EXCLUDES=$(echo "$exclude_block" | sed 's/^[[:space:]]*- *//' | tr -d '"')
     fi
+
+    # Optional CloudFront invalidation tuning (integers; defaults shown)
+    CF_INVALIDATE_ALL_THRESHOLD=$(_read_deploy_int "$env_block" cloudfront_invalidate_all_threshold 1000)
+    CF_GROUP_THRESHOLD=$(_read_deploy_int "$env_block" cloudfront_group_threshold 10)
 
     echo -e "${PASS} [${env_label}] ${AWS_REGION} Deploy target: s3://${S3_BUCKET}  CF: ${CF_DIST_ID}"
 }

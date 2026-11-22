@@ -155,12 +155,14 @@ containing `nanoc.yaml`).
 ./deploy.sh --deploy-only       # skip compile, deploy output/ as-is
 ./deploy.sh --staging           # deploy to staging environment
 ./deploy.sh --staging --deploy-only  # staging deploy, skip compile
+./deploy.sh --deploy-only --dry-run  # show what would upload/delete/invalidate, change nothing
 ```
 
 | Flag | Effect |
 |------|--------|
 | `--deploy-only` | Skip Ruby setup and nanoc compile — deploy whatever is in `output/`. Useful for CI pipelines that populate `output/` externally (e.g. image generation). Exits with error if `output/` doesn't exist. |
 | `--staging` | Deploy to staging environment. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from the `staging:` block in `nanoc.yaml`. Uses `aws s3 sync --delete` (full sync) instead of hash-based uploads. Invalidates all CloudFront paths (`/*`). Skips `.deployed` hash tracking, commit, and release tagging. |
+| `--dry-run` | Production only. Hashes `output/`, then prints how many files would be uploaded and deleted and the exact CloudFront paths that would be invalidated. Does not touch S3, CloudFront, `.deployed` or git. |
 | `--help` | Show usage |
 
 **Production pipeline (`./deploy.sh`):**
@@ -168,11 +170,26 @@ containing `nanoc.yaml`).
 2. Checks `awscli` is installed (installs via brew on macOS, or the AWS CLI v2 installer on Linux, if missing)
 3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `nanoc.yaml`
 4. Checks AWS credentials (locally falls back to `aws login`; in CI exits on failure)
-5. Uploads only new/changed files to S3 (SHA256 hash comparison)
-6. Deletes from S3 any files removed since the last deploy
-7. Invalidates only the changed paths on CloudFront
-8. Commits `.deployed` as `*** Release YYYY-MM-DD ***`
-9. Creates and pushes a sequential release tag (`YYYY-MM-DD-NN`)
+5. Hashes `output/` once and diffs it against `.deployed` to find new/changed and removed files
+6. Uploads the changed files in one parallel batch (`aws s3 cp --recursive`) — assets first, HTML last, so a page never goes live ahead of what it references. If the asset upload fails, HTML is skipped
+7. Deletes removed files from S3 in batches of up to 1000 (`aws s3api delete-objects`)
+8. Invalidates the affected paths on CloudFront in grouped requests (see below)
+9. Writes `.deployed`. Files that failed to upload or delete keep their previous entry, so the next run retries them
+10. If everything succeeded: commits `.deployed` as `*** Release YYYY-MM-DD ***` and creates and pushes a sequential release tag (`YYYY-MM-DD-NN`). If anything failed, nothing is committed or tagged and the script exits `1`
+
+Requires `ruby` on the `PATH` (hashing and batching use `tools/deploy-batches.rb`, stdlib only). CI already has it; locally it's installed by the setup step.
+
+**CloudFront invalidation grouping:** instead of one path per file, the changed/deleted keys are turned into the smallest sensible set of paths:
+
+| Change | Invalidated |
+|--------|-------------|
+| `foo/index.html` | `/foo/*` and `/foo` (the page, both URL forms and everything under it) |
+| `index.html` (site root) | `/` and `/index.html` |
+| Any other file | its exact path, e.g. `/img/a.png` (percent-encoded) |
+| `cloudfront_group_threshold` or more changed files in one directory | `/dir/*` |
+| More than `cloudfront_invalidate_all_threshold` paths in total | a single `/*` |
+
+Paths already covered by a wildcard are dropped, and requests are split at CloudFront's 3000-paths-per-request limit. A wildcard counts as one path for CloudFront billing.
 
 **Staging pipeline (`./deploy.sh --staging`):**
 1. Overlays non-deploy keys from `staging:` block (e.g. `base_url`, `indexable`) onto `nanoc.yaml` for compile
@@ -198,6 +215,13 @@ staging:
   s3_bucket: "my-staging-bucket"
   cloudfront_distribution_id: "EXXXSTAGING"
   aws_region: "eu-west-2"
+```
+
+Optional invalidation tuning (production, either format; whole numbers):
+
+```yaml
+cloudfront_group_threshold: 10             # changed files in one directory before it collapses to /dir/*
+cloudfront_invalidate_all_threshold: 1000  # total paths before falling back to /*  (1000 = CloudFront's free monthly paths)
 ```
 
 Or nest both under named blocks:
