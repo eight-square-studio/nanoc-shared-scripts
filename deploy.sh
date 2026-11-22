@@ -135,22 +135,57 @@ function strip_hashes() {
     sed 's/^[0-9a-f]\{64\}  //'
 }
 
+# Reads `aws s3 cp` output (stdout+stderr merged) and reports as it goes.
+# Successful keys are appended to $DEPLOY_TMP/uploaded.txt; anything that isn't
+# an "upload:" line (errors) is shown immediately. Few files: one line per file.
+# Many files: a line every 5% with rate and ETA.
+function track_upload_progress() {
+    local s3_bucket="$1" total="$2" count="$3"
+    local base="$3" t0=$SECONDS last_step line key pct elapsed rate msg
+    last_step=$(( count * 100 / total / 5 ))
+    while IFS= read -r line; do
+        if [[ "$line" == "upload: "* ]]; then
+            key="${line##* to s3://${s3_bucket}/}"
+            printf '%s\n' "$key" >> "${DEPLOY_TMP}/uploaded.txt"
+            count=$((count + 1))
+            if [[ "$total" -le 25 ]]; then
+                echo "    uploaded ${key} (${count}/${total})"
+            else
+                pct=$((count * 100 / total))
+                if [[ $((pct / 5)) -gt $last_step || "$count" -eq "$total" ]]; then
+                    last_step=$((pct / 5))
+                    elapsed=$((SECONDS - t0))
+                    msg="    ${count}/${total} (${pct}%) uploaded"
+                    if [[ "$elapsed" -gt 0 ]]; then
+                        rate=$(( (count - base) / elapsed ))
+                        msg+=", ${rate} files/s"
+                        [[ "$rate" -gt 0 ]] && msg+=", ~$(( (total - count) / rate ))s left"
+                    fi
+                    echo "$msg"
+                fi
+            fi
+        elif [[ -n "$line" ]]; then
+            echo -e "    ${FAIL} ${line//${DEPLOY_TMP}\//}" >&2
+        fi
+    done
+}
+
 # Upload the keys listed in $2 under one `aws s3 cp --recursive` (parallel
-# transfers). Successful keys are appended to $DEPLOY_TMP/uploaded.txt.
-# Returns non-zero if anything failed.
+# transfers), streaming progress. $3 labels the batch, $4 is the total number
+# of files in this deploy (for overall counts). Returns non-zero if anything failed.
 function upload_batch() {
-    local s3_bucket="$1" list="$2" label="$3"
+    local s3_bucket="$1" list="$2" label="$3" total="$4"
     [[ -s "$list" ]] || return 0
     local stage="${DEPLOY_TMP}/stage-${label}"
-    local out="${DEPLOY_TMP}/upload-${label}.out" err="${DEPLOY_TMP}/upload-${label}.err"
-    local rc=0
+    local n base rc=0
+    n=$(wc -l < "$list" | tr -d ' ')
+    base=$(wc -l < "${DEPLOY_TMP}/uploaded.txt" | tr -d ' ')
+    echo -e "${PASS} Uploading ${n} ${label} (${base}/${total} done so far)..."
     mkdir -p "$stage"
     ruby "$BATCH_TOOL" stage --src "${current_dir}/output" --dest "$stage" < "$list"
-    aws s3 cp "${stage}/" "s3://${s3_bucket}/" --recursive --no-progress > "$out" 2> "$err" < /dev/null || rc=$?
-    sed -n "s|^upload: .* to s3://${s3_bucket}/||p" "$out" >> "${DEPLOY_TMP}/uploaded.txt"
-    if [[ $rc -ne 0 ]]; then
-        sed 's/^/    /' "$err" >&2
-    fi
+    aws s3 cp "${stage}/" "s3://${s3_bucket}/" --recursive --no-progress < /dev/null 2>&1 \
+        | track_upload_progress "$s3_bucket" "$total" "$base" && true
+    rc=${PIPESTATUS[0]}
     return $rc
 }
 
@@ -158,9 +193,12 @@ function upload_batch() {
 # Keys S3 confirms are appended to $DEPLOY_TMP/deleted_ok.txt.
 function delete_batch() {
     local s3_bucket="$1" list="$2"
-    local rc=0 line response
+    local rc=0 line response i=0 batches
     ruby "$BATCH_TOOL" delete < "$list" > "${DEPLOY_TMP}/delete-batches.jsonl"
+    batches=$(wc -l < "${DEPLOY_TMP}/delete-batches.jsonl" | tr -d ' ')
     while IFS= read -r line; do
+        i=$((i + 1))
+        echo "    deleting batch ${i}/${batches}..."
         response=$(aws s3api delete-objects --bucket "$s3_bucket" --delete "$line" --output json < /dev/null) || rc=1
         printf '%s' "$response" | ruby "$BATCH_TOOL" delete-result >> "${DEPLOY_TMP}/deleted_ok.txt" || rc=1
     done < "${DEPLOY_TMP}/delete-batches.jsonl"
@@ -181,7 +219,10 @@ function invalidate_cloudfront() {
         --all-threshold "$CF_INVALIDATE_ALL_THRESHOLD" --ref "$(date +%s)-$$" < "$affected" > "$batches"
     request_count=$(wc -l < "$batches" | tr -d ' ')
     echo -e "${PASS} Invalidating ${path_count} CloudFront path(s) in ${request_count} request(s) on ${CF_DIST_ID}..."
+    local i=0
     while IFS= read -r line; do
+        i=$((i + 1))
+        echo "    creating invalidation request ${i}/${request_count}..."
         aws cloudfront create-invalidation \
             --distribution-id "$CF_DIST_ID" \
             --invalidation-batch "$line" \
@@ -340,6 +381,7 @@ export LC_ALL=C   # comm/sort/awk must agree on bytewise ordering
 
 echo -e "${PASS} Deploying to s3://${S3_BUCKET}/ (hash-based, batched)..."
 phase_start=$SECONDS
+echo -e "${PASS} Hashing output/ ($(find "${current_dir}/output" -type f ! -name ".*" | wc -l | tr -d ' ') files) and comparing with .deployed..."
 build_manifest "${DEPLOY_TMP}/current.manifest"
 if [[ -f "$deployed_file" ]]; then
     sort "$deployed_file" > "${DEPLOY_TMP}/previous.manifest"
@@ -380,11 +422,11 @@ if [[ "$changed_count" -gt 0 ]]; then
     grep '\.html$' "${DEPLOY_TMP}/changed.txt" > "${DEPLOY_TMP}/changed-pages.txt" || true
     phase_start=$SECONDS
     echo -e "${PASS} Uploading ${changed_count} file(s)..."
-    upload_batch "$S3_BUCKET" "${DEPLOY_TMP}/changed-assets.txt" assets || upload_failed=true
+    upload_batch "$S3_BUCKET" "${DEPLOY_TMP}/changed-assets.txt" assets "$changed_count" || upload_failed=true
     if [[ "$upload_failed" == true ]]; then
         echo -e "${FAIL} Asset upload failed — skipping HTML so pages don't go live ahead of their assets"
     else
-        upload_batch "$S3_BUCKET" "${DEPLOY_TMP}/changed-pages.txt" pages || upload_failed=true
+        upload_batch "$S3_BUCKET" "${DEPLOY_TMP}/changed-pages.txt" pages "$changed_count" || upload_failed=true
     fi
     sort -u -o "${DEPLOY_TMP}/uploaded.txt" "${DEPLOY_TMP}/uploaded.txt"
     echo -e "${PASS} Uploaded $(wc -l < "${DEPLOY_TMP}/uploaded.txt" | tr -d ' ')/${changed_count} in $((SECONDS - phase_start))s"
