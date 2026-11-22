@@ -171,7 +171,7 @@ containing `nanoc.yaml`).
 3. Reads `s3_bucket`, `cloudfront_distribution_id`, `aws_region` from `nanoc.yaml`
 4. Checks AWS credentials (locally falls back to `aws login`; in CI exits on failure)
 5. Hashes `output/` once and diffs it against `.deployed` to find new/changed and removed files
-6. Uploads the changed files in one parallel batch (`aws s3 cp --recursive`) — assets first, HTML last, so a page never goes live ahead of what it references. If the asset upload fails, HTML is skipped
+6. Uploads the changed files in one parallel batch (`aws s3 cp --recursive`), with live progress (one line per file for small deploys, otherwise a line every 5% with files/s and ETA; failures are shown as they happen) — assets first, HTML last, so a page never goes live ahead of what it references. If the asset upload fails, HTML is skipped
 7. Deletes removed files from S3 in batches of up to 1000 (`aws s3api delete-objects`)
 8. Invalidates the affected paths on CloudFront in grouped requests (see below)
 9. Writes `.deployed`. Files that failed to upload or delete keep their previous entry, so the next run retries them
