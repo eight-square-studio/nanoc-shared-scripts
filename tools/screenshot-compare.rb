@@ -665,7 +665,7 @@ if SCREENSHOT_ONLY
   current_pages = with_samples(current_pages, sample_pages(sample_config(PROJECT_CONFIG), { current: PROJECT_DIR }), :current)
 
   current_caps = build_captures(current_pages)
-  log "#{current_caps.size} captures (#{current_pages.size} pages × #{VIEWPORTS.size} viewports, after filters)" if VIEWPORTS_CONFIGURED
+  log "Captures: #{current_caps.size} (#{current_pages.size} pages × #{VIEWPORTS.size} viewports, after filters)" if VIEWPORTS_CONFIGURED
 
   current_pid = start_server(3000, dir: PROJECT_DIR)
   browser = new_browser

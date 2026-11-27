@@ -354,7 +354,7 @@ screenshot_viewports:
 | `width` | required | Integer, 200–4000 |
 | `height` | `900` | Initial viewport height (the page is then resized to its full height, as before) |
 | `label` | the width, `-dark` appended for dark | Names the capture; must be unique |
-| `scheme` | none | `light` or `dark` — emulates `prefers-color-scheme`. Omitted = no emulation |
+| `scheme` | none | `light` or `dark` — emulates `prefers-color-scheme`. Omitted = no emulation, so the browser follows the host OS (dark on a dark-mode Mac) — set `scheme: light` for a fixed light capture |
 | `pages` | all non-sampled pages | Limit the entry to these URLs |
 | `samples` | `true` for the first entry, `false` for the others | Also capture the `screenshot_samples` pages |
 
