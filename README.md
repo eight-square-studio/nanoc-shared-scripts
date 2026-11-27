@@ -279,7 +279,7 @@ The last line reads e.g. `Done — 0 failed, 36 new, 10 changed, 0 unchanged of 
 |------|------|
 | `0` | Run completed. `new`, `changed` and `removed` pages are informational |
 | `1` | Any `failed` page, or a setup/compile/worktree error |
-| `2` | Only with `--strict` (or `LAYOUT_STRICT=1`): one or more `changed`/`removed` pages not listed as expected. `new` pages never fail |
+| `2` | Only with `--strict` (or `LAYOUT_STRICT=1`): one or more `changed`/`removed` pages not listed as expected, or (with `screenshot_viewports`) any horizontal overflow. `new` pages never fail |
 
 **Baseline:** the script runs `git fetch origin release` and checks `origin/release` out into a
 detached worktree, so it compares against what is actually deployed — never against a local
@@ -296,6 +296,7 @@ without a remote prefix (a local branch, tag or SHA) is used as-is with no fetch
 screenshot_baseline: origin/release             # default
 screenshot_threshold: 1.0                       # % of pixels changed before a page counts as `changed`
 screenshot_expected_changes: [/, /privacy/]     # shown as `changed (expected)`; never trip --strict
+screenshot_viewports: [...]                     # optional, see "Viewports and colour schemes" below
 ```
 
 **Very tall pages:** Chrome can't paint a viewport taller than 16384px, so pages taller than
@@ -329,6 +330,53 @@ behaviour is unchanged.
 `release` has no generated pages yet), nothing is dropped — each build's own evenly spaced picks
 are screenshotted and reported as `new` (current only) or `removed` (release only). The log says
 how many were sampled and why.
+
+**Viewports and colour schemes:** by default every page is captured once, at 1440px wide in the
+browser's default colour scheme, so nothing narrower is ever checked. Add `screenshot_viewports`
+to capture more:
+
+```yaml
+screenshot_viewports:
+  - width: 1440                    # full set, including screenshot_samples
+  - width: 810                     # iPad portrait: where a nav that needs 816px wraps
+    pages: [/, /premium/, /other-sources/, /favourites/, /contact/]
+  - width: 390
+    pages: [/, /premium/, /other-sources/, /favourites/, /contact/]
+  - width: 320
+    pages: [/, /premium/]
+  - width: 1440
+    scheme: dark
+    pages: [/, /premium/, /favourites/]
+```
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `width` | required | Integer, 200–4000 |
+| `height` | `900` | Initial viewport height (the page is then resized to its full height, as before) |
+| `label` | the width, `-dark` appended for dark | Names the capture; must be unique |
+| `scheme` | none | `light` or `dark` — emulates `prefers-color-scheme`. Omitted = no emulation |
+| `pages` | all non-sampled pages | Limit the entry to these URLs |
+| `samples` | `true` for the first entry, `false` for the others | Also capture the `screenshot_samples` pages |
+
+- A result is identified by URL + viewport label. The first entry keeps the existing filename
+  (`premium.png`); the others are saved as `premium__810.png`, `premium__1440-dark.png` in the same
+  `current/`, `release/` and `diffs/` folders.
+- Console and report show `/premium/ @ 810` (no suffix when the only viewport is plain 1440). With more than one
+  viewport the summary reads e.g. `Done — 0 failed, 3 new, 12 changed, 40 unchanged of 55 captures`.
+  The start of the run logs the viewport list and the number of captures.
+- The baseline is captured at the same viewports and schemes, so each pair compares like with like.
+  A page missing from the baseline is `new`.
+- `screenshot_threshold` applies per capture. In `screenshot_expected_changes`, `/premium/` matches that
+  page at every viewport and `/premium/@810` only the viewport labelled `810`.
+- An invalid entry (`width: abc`, `scheme: sepia`, a non-list value, a duplicate label) logs a warning
+  and is skipped; if none are valid the default viewport is used.
+
+**Horizontal overflow check:** when `screenshot_viewports` is set, each capture also evaluates
+`document.documentElement.scrollWidth > window.innerWidth` after the page loads. If true the log
+shows `⚠ horizontal overflow at 320 (scrollWidth 340 > 320)` and the report gets an `overflow` badge.
+This needs no baseline, so it finds problems that already exist; it doesn't change the pixel status,
+but with `--strict` any overflow on a current capture exits `2`. Without `screenshot_viewports` the
+check is off, so existing setups behave exactly as before.
 
 **Customising the freeze script:**
 

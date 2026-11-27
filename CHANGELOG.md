@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-27
+
+- `check-layouts.sh`: multi-viewport and colour-scheme captures. New optional `screenshot_viewports` list in `nanoc.yaml` (`width` 200–4000, optional `height`, `label`, `scheme: light|dark`, `pages`, `samples`). Each entry is captured at its width (via `browser.resize`, so narrow widths work) with `prefers-color-scheme` emulated through CDP `Emulation.setEmulatedMedia` when `scheme` is set. A capture is identified by URL + viewport label; the first viewport keeps today's filenames, others use `<filename>__<label>.png`. Console and `report.html` show `/premium/ @ 810` (with a width badge in the report), the summary line says `captures` instead of `pages` when more than one viewport is configured, and `screenshot_expected_changes` accepts `/path/` (all viewports) or `/path/@label` (one). Sampled pages (`screenshot_samples`) are captured only at viewports with `samples: true` (default: first entry only) so run time doesn't multiply. The baseline is captured at the same viewports and schemes. Invalid entries log a warning and are skipped. Without the key nothing changes: one 1440px viewport, same filenames, report and exit codes
+- `check-layouts.sh`: horizontal-overflow check (only when `screenshot_viewports` is set) — after each page loads, `document.documentElement.scrollWidth > window.innerWidth` logs `⚠ horizontal overflow at <label> (scrollWidth N > M)` and shows an `overflow` badge in the report. It needs no baseline, doesn't change the pixel status, and under `--strict` (`LAYOUT_STRICT=1`) any overflow on a current capture exits `2`
+
 ## 2026-11-22
 
 - `deploy.sh`: live progress during production deploys — announces the hashing step, each upload batch (`Uploading N assets (x/total done so far)`), then per-file lines for small deploys or a line every 5% (`1550/3100 (50%) uploaded, 120 files/s, ~13s left`) for large ones; upload failures print immediately instead of after the batch; delete and invalidation batches are numbered
