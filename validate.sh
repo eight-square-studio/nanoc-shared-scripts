@@ -143,6 +143,29 @@ if [[ -f "$current_dir/nanoc.yaml" ]]; then
     else
         echo -e "${WARN} nanoc.yaml: no staging: block — staging deploys won't work until one is added"
     fi
+
+    # --- Check: screenshot_viewports documented (commented-out example added if the key is absent) ---
+    if grep -qE '^[[:space:]]*#?[[:space:]]*screenshot_viewports:' "$current_dir/nanoc.yaml"; then
+        check_pass "nanoc.yaml: screenshot_viewports found"
+    else
+        cat >> "$current_dir/nanoc.yaml" <<'YAML'
+
+# check-layouts.sh captures one 1440px viewport by default. Uncomment to also check
+# narrower widths and dark mode (see nanoc-shared-scripts/README.md):
+# screenshot_viewports:
+#   - width: 1440                  # full set, including screenshot_samples
+#   - width: 810                   # tablet portrait
+#     pages: [/, /contact/]        # limit to these URLs (default: all non-sampled pages)
+#   - width: 390                   # phone
+#     pages: [/, /contact/]
+#   - width: 320                   # smallest phone
+#     pages: [/]
+#   - width: 1440
+#     scheme: dark                 # emulates prefers-color-scheme
+#     pages: [/]
+YAML
+        check_pass "nanoc.yaml: added commented-out screenshot_viewports example"
+    fi
 fi
 
 # --- Check: .ruby-version exists; create with default if missing ---

@@ -378,6 +378,8 @@ This needs no baseline, so it finds problems that already exist; it doesn't chan
 but with `--strict` any overflow on a current capture exits `2`. Without `screenshot_viewports` the
 check is off, so existing setups behave exactly as before.
 
+**Viewports example in `nanoc.yaml`:** `validate.sh` appends a commented-out `screenshot_viewports` example if the key is absent (neither active nor commented out). Nothing is enabled until you uncomment it.
+
 **Customising the freeze script:**
 
 Before each screenshot, the tool injects `screenshot-overrides.js` from your project root.
