@@ -448,6 +448,71 @@ hash in `.validated` — subsequent runs with the same diff pass silently. The
 record is cleared automatically when you accept an update or the files come
 back into sync.
 
+### Claude agents and the promote skill
+
+`validate.sh` installs three Claude Code templates from `templates/claude/` into the project as
+ordinary committed files (not symlinks), so fresh clones, CI and cloud sessions all have them:
+
+| Installed to | Kind | Does |
+|---|---|---|
+| `.claude/agents/copy-reviewer.md` | agent | Read-only copy review: typos, spelling variant, consistent product wording, tone, long sentences. Reports `path:line`, the quoted text, the issue and a replacement |
+| `.claude/agents/page-dates.md` | agent | Bumps a page's "last updated" date only when that page's visible text changed (quotes the changed line as evidence; typo-only fixes, CSS, layouts, `Rules`, `nanoc.yaml`, scripts and the submodule pointer never count). Never commits |
+| `.claude/skills/promote/SKILL.md` | skill (`/promote staging\|release`) | Preflight, content review, local merge, build checks in an isolated copy, release gates, shows the plan, explicit yes, push. Never force-pushes, never resolves conflicts, never creates tags (CI does) |
+
+Per file: missing is copied (`copied from template (page-dates@1)`); identical is `up to date`;
+different shows the diff and asks `Overwrite … with template? [y/N]`. Answering no records a hash
+of the diff in `.validated` under a per-file key (`agent-copy-reviewer-diff-ok`,
+`agent-page-dates-diff-ok`, `skill-promote-diff-ok`) and the question is not asked again until the
+diff changes. In a non-interactive run (`CI` set, or no TTY) a difference is a warning and nothing
+is prompted or changed. Each template carries a version comment (`<!-- template: page-dates@1 -->`,
+the first line after the front matter), so a diff shows which version a project is on. An improved
+template only reaches a project when it re-runs `validate.sh` and accepts the diff.
+
+**A new Claude Code session is needed** to discover agents and skills that were just installed or
+updated; `validate.sh` says so.
+
+The templates contain no site facts. Each one reads its settings from `nanoc.yaml` at run time and
+stops, naming the missing key, if a required one is absent. `validate.sh` appends a commented-out
+example of each block when the key is absent (neither active nor commented out):
+
+```yaml
+agents:
+  copy_review:
+    locale: en-GB                      # required: en-GB or en-US
+    product: My Product                # required
+    tagline: "My tagline"              # optional
+    terms: [Favourites, Premium]       # optional: canonical wording checked for consistency
+    sources: [content/pages/*.haml, content/pages/*.md, layouts/*.haml]   # required: files or globs
+    notes: .claude/copy-review-notes.md   # optional free-text rules
+  dated_pages:                         # pages that show a "last updated" date
+    - page: /help/
+      date_in: content/data/faqs.yaml            # data file holding the date (key date_key, default last_updated)
+      content: [content/data/faqs.yaml, content/pages/help.haml]   # files whose visible text counts
+    - page: /privacy-policy/
+      date_line: content/pages/privacy-policy.md # inline "> **Last updated:** ..." line instead
+      content: [content/pages/privacy-policy.md]
+      changelog_table: true            # propose a row in the file's `## Changes` table on a bump
+      note: "free text for this page"  # optional
+  never_touch_dates: [content/data/releases.yaml]   # dates the agent reports but never edits
+  date_format: "%-d %B %Y"             # optional strftime format
+
+promote:                               # or `promote: false` to skip installing the skill
+  branches: { source: main, staging: staging, release: release }   # required
+  review_agents: [copy-reviewer, page-dates]   # default
+  checks:                              # run in the isolated copy; a non-zero exit blocks
+    - ruby scripts/my-build-check.rb
+  release_blockers: ["coming soon"]    # grep -rniE over content/ and layouts/ on a release
+  hidden_page_flag: publish            # flag any page whose `publish: false` changes in a release
+  notes: .claude/promote-notes.md      # optional free-text gates and reminders
+```
+
+Anything that doesn't fit the schema goes in the optional notes files (`copy_review.notes`,
+`promote.notes`), which the agent or skill reads — for example release-note rules or a
+"never touch another repo" reminder. `validate.sh` also warns (it never fails) when a path under
+`copy_review.sources`, `dated_pages` (`date_in`, `date_line`, `content`) or `never_touch_dates`
+doesn't exist, or when a `dated_pages` entry is malformed. `/promote` assumes the staging/release
+branch model that `deploy.yml` implies; set `promote: false` if the project doesn't use it.
+
 Writes `.validated` to the project root on success. Creates `run.sh`,
 `deploy.sh`, `check-layouts.sh`, and `generate-transcripts.sh` symlinks and
 adds all five (plus `.validated`) to `.gitignore` — local machine state only,

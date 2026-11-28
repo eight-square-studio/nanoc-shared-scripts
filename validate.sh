@@ -6,6 +6,7 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/_shared.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/claude_templates.sh"
 PASS_COUNT=0
 FAIL_COUNT=0
 
@@ -166,6 +167,10 @@ if [[ -f "$current_dir/nanoc.yaml" ]]; then
 YAML
         check_pass "nanoc.yaml: added commented-out screenshot_viewports example"
     fi
+
+    # --- Check: agents / promote config (warn about missing paths; add commented examples when absent) ---
+    check_claude_config_paths
+    add_claude_config_examples
 fi
 
 # --- Check: .ruby-version exists; create with default if missing ---
@@ -262,6 +267,9 @@ else
         fi
     fi
 fi
+
+# --- Claude agents and skill: copy templates/claude/ into .claude/ (accepted-diff flow per file) ---
+install_claude_templates
 
 # --- Check: deploy.yml calls the shared reusable workflow ---
 if grep -q "nanoc-shared-scripts" "$workflow_file"; then
@@ -376,6 +384,7 @@ validated_file="$current_dir/.validated"
     if [[ -n "$deploy_yml_diff_accepted" ]]; then
         echo "deploy-yml-diff-ok: $deploy_yml_diff_accepted"
     fi
+    printf '%s' "$CLAUDE_DIFF_ACCEPTED"
 } > "$validated_file"
 echo -e "${PASS} Written: .validated"
 

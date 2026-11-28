@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-28
+
+- Claude Code templates: new `templates/claude/` with a generic `copy-reviewer` agent, `page-dates` agent and `promote` skill (`/promote staging|release`), taken from fontasso.com with every site-specific fact moved into new `nanoc.yaml` keys (`agents.copy_review`, `agents.dated_pages`, `agents.never_touch_dates`, `agents.date_format`, `promote`) and optional free-text notes files. Each template starts (after the front matter) with a version comment such as `<!-- template: page-dates@1 -->`. See `docs/claude-templates-proposal.md` and the README section "Claude agents and the promote skill"
+- `validate.sh` installs them into `.claude/agents/` and `.claude/skills/promote/` as committed files (not symlinks) using the `deploy.yml` accepted-diff pattern: copy if missing, `up to date` if identical, otherwise show the diff and ask; answering no is remembered in `.validated` under one key per file (`agent-copy-reviewer-diff-ok`, `agent-page-dates-diff-ok`, `skill-promote-diff-ok`). Non-interactive runs (`CI` set or no TTY) warn about a difference and never prompt. A note says a new Claude session is needed to discover new agents. `promote: false` in `nanoc.yaml` skips the skill
+- `validate.sh` warns (never fails) about paths under `agents.copy_review.sources`, `agents.dated_pages` and `agents.never_touch_dates` that don't exist or entries that are malformed, and appends commented-out `agents:` and `promote:` examples to `nanoc.yaml` when those keys are absent (neither active nor commented out). New `lib/claude_templates.sh` and `tools/check-agent-config.rb` (stdlib-only) hold the logic
+- Tests: `test/claude_templates/run.sh` covers the three install outcomes (missing, identical, differs), the accepted-diff memory per file, the non-interactive path, `promote: false`, the config examples and the path warnings; added to the CI workflow
+
 ## 2026-11-27
 
 - `validate.sh`: also gitignores `.deploy-tmp.*` (`deploy.sh` scratch dir, only left behind if a deploy is hard-killed) and `tmp/` (`check-layouts.sh` screenshots and worktree); `/tmp/` already counts as present
