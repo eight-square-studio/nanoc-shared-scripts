@@ -35,19 +35,23 @@ check-layouts.sh   # Visual regression screenshot comparison (current branch vs 
 generate-transcripts.sh # Batch-generate WebVTT caption transcripts for a folder of videos (whisper.cpp)
 lib/
   _shared.sh                 # Sourced by other scripts — setup functions, colours, vars
+  claude_templates.sh        # Sourced by validate.sh — installs templates/claude/ into .claude/, checks agents:/promote: config
   deploy_helpers.sh          # Sourced by deploy.sh (and future standalone scripts) — config parsing, S3 content-type helper
   shared_helpers.rb          # Shared Ruby/nanoc helpers — required from a consumer's lib/helpers.rb
 tools/
   screenshot-compare.rb      # Ruby script called by check-layouts.sh
   deploy-batches.rb          # Stdlib-only Ruby helper called by deploy.sh (manifest, stage, invalidate, delete)
+  check-agent-config.rb      # Stdlib-only Ruby helper called by lib/claude_templates.sh (path/shape warnings for agents: config)
 test/
   deploy_batches_test.rb     # Minitest unit tests for tools/deploy-batches.rb
   deploy/run.sh              # End-to-end deploy.sh scenarios against a fake aws + throwaway git repo
   deploy/fake-aws            # Fake `aws` CLI (local dir as bucket) used by run.sh
+  claude_templates/run.sh    # lib/claude_templates.sh + check-agent-config.rb: install outcomes, accepted diffs, non-interactive path
 templates/
   deploy.yml                 # Full workflow — copied into consumer projects by validate.sh
   Gemfile                    # Baseline Gemfile — copied into project root if missing
   screenshot-overrides.js    # JS injected before screenshots — copied into project root if missing
+  claude/                    # Generic Claude Code templates — agents/{copy-reviewer,page-dates}.md, skills/promote/SKILL.md; copied into .claude/ by validate.sh
 CLAUDE.md
 README.md
 ```
@@ -86,6 +90,28 @@ were pulled out of `deploy.sh` so the standalone `fix-content-type.sh`
 script can reuse them without pulling in the rest of `deploy.sh`). Relies on
 `current_dir`, `AWS_REGION`, `STAGING`, and the `PASS`/`FAIL` colour constants
 from `lib/_shared.sh` — must be sourced after it.
+
+### lib/claude_templates.sh internals
+
+Sourced by `validate.sh` (needs `SCRIPT_DIR`, `current_dir`, `check_pass` and the colour constants
+from `lib/_shared.sh`); `test/claude_templates/run.sh` sources it with stubs. Table `CLAUDE_TEMPLATES`
+maps each path under `templates/claude/` (also its path under the project's `.claude/`) to its
+`.validated` key. `install_claude_template` is the `deploy.yml` accepted-diff flow per file; accepted
+`key: hash` lines accumulate in `CLAUDE_DIFF_ACCEPTED`, which `validate.sh` re-emits when it rewrites
+`.validated` (an accepted diff that is not re-emitted is forgotten). Non-interactive = `CI` set (wins) or
+stdin not a TTY; `CLAUDE_TEMPLATES_ASSUME_TTY=1` is a test-only hook (`read -p` prints no prompt off a
+terminal, so tests assert on the diff header and on stdin not being consumed). The "new session" note is
+printed only when a file was copied or overwritten. `promote: false` (top-level, matched by grep) skips the
+skill. `add_claude_config_examples` appends a commented block per absent key (`agents`, `promote`;
+active or `#`-commented both count as present). `check_claude_config_paths` runs
+`tools/check-agent-config.rb`, which prints one problem per line and never raises on bad YAML; globs in
+`sources` count as present when they match something.
+
+Template gotchas: the version comment goes on the first line *after* the front matter (front matter must be
+the first thing in the file); template `description` fields say "this site" because front matter can't be
+parameterised; the agents/skill read `nanoc.yaml` with the Read tool at run time and must stop and name the
+missing key rather than guess. Keep new site facts out of the templates — add a schema key instead. Bump the
+`@N` in a template's version comment when its behaviour changes.
 
 ### deploy.sh internals
 
@@ -176,6 +202,7 @@ template calls with `NoMethodError: private method`.
 ```bash
 ruby test/deploy_batches_test.rb   # unit tests for tools/deploy-batches.rb
 bash test/deploy/run.sh            # deploy.sh end to end (production + staging) against a fake aws
+bash test/claude_templates/run.sh   # validate.sh's Claude template install + agents:/promote: config checks
 ```
 
 CI (`.github/workflows/test.yml`) runs both on ubuntu and macOS for every PR. `run.sh` builds a
