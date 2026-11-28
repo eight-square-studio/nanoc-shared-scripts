@@ -318,6 +318,18 @@ for entry in .validated run.sh deploy.sh check-layouts.sh generate-transcripts.s
     fi
 done
 
+# --- Ensure script scratch/output dirs are gitignored ---
+# .deploy-tmp.*  deploy.sh scratch dir (left behind only if deploy is hard-killed)
+# tmp/           check-layouts.sh screenshots and baseline worktree
+for entry in ".deploy-tmp.*" "tmp/"; do
+    if grep -qFx -e "$entry" -e "/$entry" "$gitignore_file" 2>/dev/null; then
+        echo -e "${PASS} .gitignore already ignores ${entry}"
+    else
+        printf "\n%s\n" "$entry" >> "$gitignore_file"
+        echo -e "${PASS} Added ${entry} to .gitignore"
+    fi
+done
+
 # --- Create symlinks at project root ---
 for script in run.sh deploy.sh check-layouts.sh generate-transcripts.sh; do
     target="nanoc-shared-scripts/${script}"
